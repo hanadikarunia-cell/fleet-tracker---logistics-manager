@@ -88,7 +88,7 @@ export default function InventoryPdfModal({
                 <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center text-white font-black text-sm">
                   AA
                 </div>
-                <h1 className="text-xl font-black tracking-tight text-slate-900 uppercase">AirAsia Fleet Logistics</h1>
+                <h1 className="text-xl font-black tracking-tight text-slate-900 uppercase">Tangerang Fleet Logistics</h1>
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 Global Cargo & Aviation Maintenance Depot Management Division

@@ -26,7 +26,7 @@ export default function SmartRouteSimulator() {
   const routePoints: SimulatorWaypoint[] = useMemo(() => {
     return [
       {
-        name: 'Westport Gate 1',
+        name: 'Tanjung Priok Gate 1',
         distanceKm: 0,
         baselineSpeedKmh: 80,
         simulatedSpeedKmh: Math.round(80 / (weatherSeverity * 0.9)),
@@ -34,7 +34,7 @@ export default function SmartRouteSimulator() {
         simulatedFuelLiters: 0,
       },
       {
-        name: 'Klang Expressway Jct',
+        name: 'Merak Expressway Jct',
         distanceKm: 22,
         baselineSpeedKmh: 45,
         simulatedSpeedKmh: Math.round(75 / (weatherSeverity * 0.95)),
@@ -42,7 +42,7 @@ export default function SmartRouteSimulator() {
         simulatedFuelLiters: preferTolls ? 6.5 : 8.1,
       },
       {
-        name: 'Shah Alam Cargo Hub',
+        name: 'Cikupa Cargo Hub',
         distanceKm: 48,
         baselineSpeedKmh: 50,
         simulatedSpeedKmh: Math.round(70 / roadworkImpact),
@@ -50,7 +50,7 @@ export default function SmartRouteSimulator() {
         simulatedFuelLiters: preferTolls ? 13.8 : 16.2,
       },
       {
-        name: 'Sepang KLIA Freight Depot',
+        name: 'Cengkareng CGK Freight Depot',
         distanceKm: 88,
         baselineSpeedKmh: 78,
         simulatedSpeedKmh: Math.round(85 / (weatherSeverity * 0.9)),

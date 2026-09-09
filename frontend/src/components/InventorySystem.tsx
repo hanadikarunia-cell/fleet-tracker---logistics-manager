@@ -114,7 +114,7 @@ export default function InventorySystem({
   const [formCategory, setFormCategory] = useState<CategoryType>('Cargo');
   const [formQuantity, setFormQuantity] = useState(1);
   const [formUnitWeight, setFormUnitWeight] = useState(1.0);
-  const [formLocation, setFormLocation] = useState('Kuala Lumpur HQ Depot');
+  const [formLocation, setFormLocation] = useState('Tangerang HQ Depot');
   const [formVehicleId, setFormVehicleId] = useState<string>('');
   const [formMinStockLevel, setFormMinStockLevel] = useState(5);
 
@@ -246,7 +246,7 @@ export default function InventorySystem({
     setFormQuantity(1);
     setFormUnitWeight(1.0);
     setFormMinStockLevel(5);
-    setFormLocation('Kuala Lumpur HQ Depot');
+    setFormLocation('Tangerang HQ Depot');
     setFormVehicleId('');
     setShowAddForm(false);
   };
@@ -316,7 +316,7 @@ export default function InventorySystem({
   // List of distinct location hubs (HQ Warehouse + Active Vehicles)
   const locationHubs = useMemo(() => {
     const hubs: Array<{ id: string; name: string; type: 'warehouse' | 'vehicle' }> = [
-      { id: 'warehouse_hq', name: 'Kuala Lumpur HQ Depot', type: 'warehouse' },
+      { id: 'warehouse_hq', name: 'Tangerang HQ Depot', type: 'warehouse' },
     ];
     vehicles.forEach(v => {
       hubs.push({
@@ -1404,7 +1404,7 @@ export default function InventorySystem({
                   type="text"
                   value={formLocation}
                   onChange={(e) => setFormLocation(e.target.value)}
-                  placeholder="e.g. Kuala Lumpur HQ Depot"
+                  placeholder="e.g. Tangerang HQ Depot"
                   className="p-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 />
               </div>

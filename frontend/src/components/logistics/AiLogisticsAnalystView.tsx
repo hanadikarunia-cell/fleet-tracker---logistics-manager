@@ -29,13 +29,13 @@ const PRESET_QUERIES = [
 
 const INITIAL_INSIGHTS: AnalysisInsight[] = [
   {
-    title: 'Highway E6 Klang Valley Congestion Mitigation Strategy',
+    title: 'Jakarta-Merak Toll Jabodetabek Congestion Mitigation Strategy',
     category: 'efficiency',
     impactScore: 92,
     summary: 'Telematics data shows a 34-minute average delay per heavy hauler between 07:30 - 09:30 AM due to port gate bottlenecks.',
     recommendations: [
       'Shift 40% of non-perishable freight dispatches to off-peak night window (22:00 - 04:00)',
-      'Utilize South Klang Bypass (E28) detour for vehicles with gross weight > 12 tonnes',
+      'Utilize South Tangerang Bypass (JORR2) detour for vehicles with gross weight > 12 tonnes',
       'Pre-clear customs documentation via AI Digital Freight Manifest to reduce gate idle time by 18 mins'
     ],
     projectedSavings: '$14,200 / month in idle fuel & driver overtime',
@@ -47,7 +47,7 @@ const INITIAL_INSIGHTS: AnalysisInsight[] = [
     summary: '12 diesel urban vans exhibit daily routes under 140 km with frequent stop-and-go patterns optimal for zero-emission EV conversion.',
     recommendations: [
       'Transition 5 urban vans to 80 kWh EV platforms during H2 maintenance cycle',
-      'Install 120 kW DC fast chargers at Shah Alam distribution hub',
+      'Install 120 kW DC fast chargers at Cikupa distribution hub',
       'Utilize regenerative braking telematics scoring to extend battery range by 14%'
     ],
     projectedSavings: '38.4 Tonnes CO2 / year & $22,800 fuel cost reduction',
@@ -123,7 +123,7 @@ export default function AiLogisticsAnalystView({ vehicles, drivers }: AiLogistic
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleRunAnalysis(query)}
-            placeholder="Ask AI Analyst e.g. 'How can we reduce fuel burn on Klang regional routes by 10%?'..."
+            placeholder="Ask AI Analyst e.g. 'How can we reduce fuel burn on Tangerang regional routes by 10%?'..."
             className="w-full pl-12 pr-32 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-600 focus:bg-white transition"
           />
           <button

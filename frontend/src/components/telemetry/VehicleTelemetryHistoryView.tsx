@@ -54,10 +54,10 @@ const GENERATE_SAMPLE_POINTS = (vehicleName: string): TelemetryPoint[] => {
       event = 'TPMS Low Pressure Alert Rear-Right (28 PSI)';
       severity = 'critical';
     } else if (i === 11) {
-      event = 'Geofence Entry: KUL Cargo Gate 2';
+      event = 'Geofence Entry: CGK Cargo Gate 2';
       severity = 'info';
     } else if (i === 14) {
-      event = 'Excessive Idling (>15 mins at Port Klang)';
+      event = 'Excessive Idling (>15 mins at Tanjung Priok)';
       severity = 'warning';
     }
 

@@ -45,8 +45,8 @@ const REWARD_STORE_ITEMS: RewardItem[] = [
     stockRemaining: 18,
   },
   {
-    id: 'rew_airasia_flight',
-    title: 'AirAsia $150 Flight Voucher',
+    id: 'rew_travel_voucher',
+    title: 'Rp 1,500,000 Travel Voucher',
     category: 'travel',
     pointsCost: 2800,
     valueDescription: 'Valid for domestic & ASEAN regional flights.',

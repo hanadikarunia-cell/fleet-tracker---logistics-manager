@@ -39,10 +39,10 @@ export default function InventoryBulkImportView({
   // Sample CSV Template Generator
   const handleDownloadSampleCsv = () => {
     const sampleCsv = `sku,name,category,quantity,unitWeight,minStockLevel,location
-ENG-BLT-501,Turbine Drive Belt Assembly,Spare Parts,12,3.5,4,Kuala Lumpur HQ Depot
-AV-GPS-802,GPS Telemetry Transceiver Unit,Electronics,8,1.2,2,Kuala Lumpur HQ Depot
-MED-OXY-104,Emergency Flight Oxygen Cylinder,Hazmat,15,8.0,5,Penang Regional Hub
-TOOL-WRENCH-99,Precision Hydraulic Torque Wrench,Tools,6,4.2,2,Kuala Lumpur HQ Depot`;
+ENG-BLT-501,Turbine Drive Belt Assembly,Spare Parts,12,3.5,4,Tangerang HQ Depot
+AV-GPS-802,GPS Telemetry Transceiver Unit,Electronics,8,1.2,2,Tangerang HQ Depot
+MED-OXY-104,Emergency Flight Oxygen Cylinder,Hazmat,15,8.0,5,Bandung Regional Hub
+TOOL-WRENCH-99,Precision Hydraulic Torque Wrench,Tools,6,4.2,2,Tangerang HQ Depot`;
 
     const blob = new Blob([sampleCsv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -81,7 +81,7 @@ TOOL-WRENCH-99,Precision Hydraulic Torque Wrench,Tools,6,4.2,2,Kuala Lumpur HQ D
       const quantity = Math.max(0, parseInt(parts[3] || '1', 10));
       const unitWeight = Math.max(0.1, parseFloat(parts[4] || '1.0'));
       const minStockLevel = Math.max(1, parseInt(parts[5] || '5', 10));
-      const location = parts[6] || 'Kuala Lumpur HQ Depot';
+      const location = parts[6] || 'Tangerang HQ Depot';
 
       const errors: string[] = [];
       if (!sku) errors.push('Missing SKU code');
@@ -251,7 +251,7 @@ TOOL-WRENCH-99,Precision Hydraulic Torque Wrench,Tools,6,4.2,2,Kuala Lumpur HQ D
               setRawCsvText(e.target.value);
               parseCsvContent(e.target.value);
             }}
-            placeholder="sku,name,category,quantity,unitWeight,minStockLevel,location&#10;SKU-101,Spare Propeller,Spare Parts,10,2.5,3,Kuala Lumpur HQ Depot"
+            placeholder="sku,name,category,quantity,unitWeight,minStockLevel,location&#10;SKU-101,Spare Propeller,Spare Parts,10,2.5,3,Tangerang HQ Depot"
             rows={4}
             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 outline-none focus:border-indigo-500"
           />

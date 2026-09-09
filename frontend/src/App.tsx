@@ -24,38 +24,16 @@ import {
   Volume2, VolumeX, Activity, Clock, ShieldAlert
 } from 'lucide-react';
 
+// Fallback shown only until the real app_users list loads from the API (see the load
+// effect below), which always overwrites this with the real seeded user.
 const initialUsers: AppUser[] = [
   {
     id: 'USR-01',
-    name: 'Paul Hendarto',
-    email: 'paulushendarto@airasia.com',
+    name: 'Hanadi',
+    email: 'hanadikarunia@gmail.com',
     role: 'administrator',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-    department: 'Digital Logistics IT'
-  },
-  {
-    id: 'USR-02',
-    name: 'Siti Aminah',
-    email: 'siti.aminah@airasia.com',
-    role: 'supervisor',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=120&auto=format&fit=crop&q=80',
-    department: 'KUL Operations Hub'
-  },
-  {
-    id: 'USR-03',
-    name: 'Ravi Kumar',
-    email: 'ravi.kumar@airasia.com',
-    role: 'user',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
-    department: 'Fleet Dispatch Desk'
-  },
-  {
-    id: 'USR-04',
-    name: 'Alex Tan',
-    email: 'alex.tan@airasia.com',
-    role: 'viewer',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80',
-    department: 'Corporate Audit & Risk'
+    department: 'Fleet Operations'
   }
 ];
 
@@ -103,9 +81,9 @@ export default function App() {
     const saved = localStorage.getItem('fleet_custom_routes');
     if (saved) return JSON.parse(saved);
     return [
-      { id: 'R-01', title: 'KUL Depot ➡️ PEN Airport', from: 'Kuala Lumpur HQ Depot', to: 'Penang Airport Hub', desc: 'Trunk Route via North-South Highway', code: 'KLIA-PEN-EXP', waypoints: [{ ptNode: 'KLIA Hub', code: 'KUL' }, { ptNode: 'Subang SkyLink', code: 'SZB' }, { ptNode: 'Penang Hub', code: 'PEN' }] },
-      { id: 'R-02', title: 'KUL Depot ➡️ SZB SkyPark', from: 'Kuala Lumpur HQ Depot', to: 'Subang Cargo Center', desc: 'Metropolitan Bypass via Shah Alam Expressway', code: 'KLIA-SZB-METRO', waypoints: [{ ptNode: 'KLIA Hub', code: 'KUL' }, { ptNode: 'Shah Alam Hub', code: 'SAH' }, { ptNode: 'Subang SkyLink', code: 'SZB' }] },
-      { id: 'R-03', title: 'PEN Airport ➡️ SZB Airport', from: 'Penang Airport Hub', to: 'Subang Airport Depot', desc: 'Intercity Shuttle bypassing mountain curves', code: 'PEN-SZB-SHUTTLE', waypoints: [{ ptNode: 'Penang Hub', code: 'PEN' }, { ptNode: 'Ipoh Link', code: 'IPH' }, { ptNode: 'Subang SkyLink', code: 'SZB' }] }
+      { id: 'R-01', title: 'TNG Depot ➡️ CGK Airport', from: 'Tangerang HQ Depot', to: 'Soekarno-Hatta Airport Cargo Terminal', desc: 'Trunk Route via Sedyatmo Toll Road', code: 'CGK-TNG-EXP', waypoints: [{ ptNode: 'Tangerang Depot', code: 'TNG' }, { ptNode: 'Sedyatmo Tollgate', code: 'STG' }, { ptNode: 'CGK Cargo Hub', code: 'CGK' }] },
+      { id: 'R-02', title: 'TNG Depot ➡️ BSD Hub', from: 'Tangerang HQ Depot', to: 'BSD City Logistics Hub', desc: 'Metropolitan Bypass via Serpong Toll Road', code: 'TNG-BSD-METRO', waypoints: [{ ptNode: 'Tangerang Depot', code: 'TNG' }, { ptNode: 'Serpong Tollgate', code: 'SPG' }, { ptNode: 'BSD Hub', code: 'BSD' }] },
+      { id: 'R-03', title: 'CGK Airport ➡️ Priok Port', from: 'Soekarno-Hatta Airport Cargo Terminal', to: 'Tanjung Priok Port Depot', desc: 'Intercity Shuttle via Jakarta Outer Ring Road', code: 'CGK-PRIOK-SHUTTLE', waypoints: [{ ptNode: 'CGK Cargo Hub', code: 'CGK' }, { ptNode: 'JORR Interchange', code: 'JOR' }, { ptNode: 'Tanjung Priok Port', code: 'PRK' }] }
     ];
   });
 
@@ -455,7 +433,7 @@ export default function App() {
 
   const handleAssignItemToVehicle = async (itemId: string, vehicleId: string | undefined) => {
     const pairedVeh = vehicles.find((v) => v.id === vehicleId);
-    const location = pairedVeh ? pairedVeh.name : 'Kuala Lumpur HQ Depot';
+    const location = pairedVeh ? pairedVeh.name : 'Tangerang HQ Depot';
     const updated = await api.inventory.update(itemId, { assignedVehicleId: vehicleId ?? null, location });
     const nextInventory = inventory.map((item) => (item.id === itemId ? updated : item));
     setInventory(nextInventory);
@@ -765,7 +743,7 @@ export default function App() {
               </div>
               <div>
                 <h1 className="font-extrabold text-sm tracking-wider">FLEET TRACKER</h1>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">AirAsia Logistics</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Tangerang Logistics</p>
               </div>
             </div>
             
@@ -997,7 +975,7 @@ export default function App() {
               {activeTab === 'users' && 'User Role & Permissions Center'}
             </h2>
             <p className="text-xs text-slate-500 font-semibold">
-              {activeTab === 'map' && 'Track physical assets en-route across peninsular Malaysia airports.'}
+              {activeTab === 'map' && 'Track physical assets en-route across Greater Jakarta (Jabodetabek).'}
               {activeTab === 'dashboard' && 'Aggregated diagnostic logs, low battery alarms, and geofence cross triggers.'}
               {activeTab === 'telemetry' && 'Inspect CAN-bus diagnostic logs, speed curves, TPMS pressure history, and telemetry playbacks.'}
               {activeTab === 'eta' && 'Predict exact arrival times using highway traffic index, weather friction, and driver rest mandates.'}
@@ -1290,7 +1268,7 @@ export default function App() {
                   required
                   value={newFenceName}
                   onChange={(e) => setNewFenceName(e.target.value)}
-                  placeholder="e.g. Subang Cargo Center"
+                  placeholder="e.g. BSD Logistics Hub"
                   className="p-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>

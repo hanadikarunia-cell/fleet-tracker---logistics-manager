@@ -26,10 +26,10 @@ export interface RainCell {
 export const LIVE_RAIN_CELLS: RainCell[] = [
   {
     id: 'cell-01',
-    name: 'Port Klang Heavy Monsoon Front',
-    locationName: 'Westport & Northport Cargo Corridor',
-    lat: 2.9900,
-    lng: 101.3500,
+    name: 'Cengkareng Heavy Monsoon Front',
+    locationName: 'Soekarno-Hatta Airport Cargo Corridor',
+    lat: -6.1256,
+    lng: 106.6559,
     radiusMeters: 14000,
     precipitationMmHour: 42.5,
     dbzReflectivity: 48,
@@ -39,10 +39,10 @@ export const LIVE_RAIN_CELLS: RainCell[] = [
   },
   {
     id: 'cell-02',
-    name: 'Sepang KLIA Downpour Cell',
-    locationName: 'E6 ELITE Highway & Sepang Airport Expressway',
-    lat: 2.7600,
-    lng: 101.7100,
+    name: 'Tangerang-Merak Downpour Cell',
+    locationName: 'Jakarta-Merak Toll Road & Bandara Interchange',
+    lat: -6.1600,
+    lng: 106.5800,
     radiusMeters: 18000,
     precipitationMmHour: 55.0,
     dbzReflectivity: 53,
@@ -52,10 +52,10 @@ export const LIVE_RAIN_CELLS: RainCell[] = [
   },
   {
     id: 'cell-03',
-    name: 'Shah Alam & Subang Moderate Rain Band',
-    locationName: 'Federal Highway & Subang Airport Road',
-    lat: 3.0800,
-    lng: 101.5400,
+    name: 'BSD & Serpong Moderate Rain Band',
+    locationName: 'Serpong-BSD Business District & Jalan Raya Serpong',
+    lat: -6.3020,
+    lng: 106.6528,
     radiusMeters: 12000,
     precipitationMmHour: 18.2,
     dbzReflectivity: 35,
@@ -65,10 +65,10 @@ export const LIVE_RAIN_CELLS: RainCell[] = [
   },
   {
     id: 'cell-04',
-    name: 'Slim River Squall Corridor',
-    locationName: 'E1 North-South Expressway (KM 380 - 410)',
-    lat: 3.8200,
-    lng: 101.4200,
+    name: 'Alam Sutera Squall Corridor',
+    locationName: 'Jakarta Outer Ring Road (JORR) & Alam Sutera Interchange',
+    lat: -6.2200,
+    lng: 106.6700,
     radiusMeters: 22000,
     precipitationMmHour: 32.0,
     dbzReflectivity: 44,
@@ -142,7 +142,7 @@ export default function MapView({
   const weatherCellsGroupRef = useRef<L.LayerGroup | null>(null);
   const measureGroupRef = useRef<L.LayerGroup | null>(null);
 
-  const [mapType, setMapType] = useState<'google_road' | 'google_satellite' | 'google_hybrid' | 'osm'>('google_road');
+  const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
   const [showLayerMenu, setShowLayerMenu] = useState(false);
   const [showZoomMenu, setShowZoomMenu] = useState(false);
   const [showExportStateModal, setShowExportStateModal] = useState(false);
@@ -167,6 +167,33 @@ export default function MapView({
   const [showWeatherHud, setShowWeatherHud] = useState(true);
   const [showTrafficLegend, setShowTrafficLegend] = useState(true);
 
+  // RainViewer's real public API — tile paths are timestamp-based and must be fetched from
+  // this manifest first; there's no fixed "nowcast" tile URL.
+  const [radarHost, setRadarHost] = useState<string | null>(null);
+  const [radarPastPaths, setRadarPastPaths] = useState<string[]>([]);
+  const [radarNowcastPaths, setRadarNowcastPaths] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch('https://api.rainviewer.com/public/weather-maps.json')
+      .then((res) => res.json())
+      .then((data) => {
+        setRadarHost(data.host);
+        setRadarPastPaths((data.radar?.past ?? []).map((f: { path: string }) => f.path));
+        setRadarNowcastPaths((data.radar?.nowcast ?? []).map((f: { path: string }) => f.path));
+      })
+      .catch((err) => console.error('Failed to load RainViewer radar manifest:', err));
+  }, []);
+
+  // Map the 5 HUD frame buttons (-45m, -30m, -15m, LIVE NOW, +15m FCST) onto real frames.
+  const activeRadarPath = (() => {
+    const past = radarPastPaths;
+    if (radarFrameIndex === 4) return radarNowcastPaths[0] ?? past[past.length - 1];
+    if (radarFrameIndex === 3) return past[past.length - 1];
+    // -15m/-30m/-45m: step back from the most recent past frame (frames are ~10min apart).
+    const stepsBack = 3 - radarFrameIndex;
+    return past[Math.max(0, past.length - 1 - stepsBack)];
+  })();
+
   // Sync state with settings prop
   useEffect(() => {
     if (settings.showWeather !== undefined) {
@@ -174,21 +201,31 @@ export default function MapView({
     }
   }, [settings.showWeather]);
 
-  // Map sources dictionary
+  // Map sources dictionary — free, key-free tile providers (no unofficial/ToS-violating endpoints)
   const mapTileUrls = {
-    google_road: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-    google_satellite: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-    google_hybrid: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-    osm: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    street: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   };
+
+  // Keep latest callback props in refs so the map-init effect below can stay mount-only
+  // (dep-array churn on inline prop closures — e.g. onUpdateSettings — would otherwise tear
+  // down and rebuild the whole Leaflet map, including every layer, on nearly any re-render).
+  const isDrawingGeofenceRef = useRef(isDrawingGeofence);
+  const onAddGeofenceClickRef = useRef(onAddGeofenceClick);
+  const onDrawGeofenceCompleteRef = useRef(onDrawGeofenceComplete);
+  useEffect(() => {
+    isDrawingGeofenceRef.current = isDrawingGeofence;
+    onAddGeofenceClickRef.current = onAddGeofenceClick;
+    onDrawGeofenceCompleteRef.current = onDrawGeofenceComplete;
+  }, [isDrawingGeofence, onAddGeofenceClick, onDrawGeofenceComplete]);
 
   // 1. Initialize Map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    // Use default coords: Kuala Lumpur
-    const centerLat = selectedVehicle ? selectedVehicle.location.lat : 3.0000;
-    const centerLng = selectedVehicle ? selectedVehicle.location.lng : 101.6500;
+    // Use default coords: Tangerang, Indonesia
+    const centerLat = selectedVehicle ? selectedVehicle.location.lat : -6.1783;
+    const centerLng = selectedVehicle ? selectedVehicle.location.lng : 106.6319;
     const initialZoom = selectedVehicle ? 14 : 11;
 
     const map = L.map(mapContainerRef.current, {
@@ -213,9 +250,9 @@ export default function MapView({
         setMeasurePoints((prev) => [...prev, { lat: e.latlng.lat, lng: e.latlng.lng }]);
         return;
       }
-      if (isDrawingGeofence) {
-        onAddGeofenceClick(e.latlng.lat, e.latlng.lng);
-        onDrawGeofenceComplete();
+      if (isDrawingGeofenceRef.current) {
+        onAddGeofenceClickRef.current(e.latlng.lat, e.latlng.lng);
+        onDrawGeofenceCompleteRef.current();
       }
     });
 
@@ -233,7 +270,7 @@ export default function MapView({
         mapRef.current = null;
       }
     };
-  }, [isDrawingGeofence, onAddGeofenceClick, onDrawGeofenceComplete]);
+  }, []);
 
   // 2. Handle map tile and offline mode updates
   useEffect(() => {
@@ -244,12 +281,13 @@ export default function MapView({
       tileLayerRef.current.remove();
     }
 
-    const currentMode = (settings.isOfflineMode || offlineSimulate) ? 'osm' : mapType;
+    const currentMode = (settings.isOfflineMode || offlineSimulate) ? 'street' : mapType;
     const url = mapTileUrls[currentMode];
 
     const tileLayer = L.tileLayer(url, {
-      maxZoom: 20,
-      subdomains: ['a', 'b', 'c'],
+      maxZoom: currentMode === 'satellite' ? 19 : 20,
+      subdomains: currentMode === 'street' ? ['a', 'b', 'c'] : [],
+      attribution: currentMode === 'satellite' ? 'Tiles &copy; Esri' : '&copy; OpenStreetMap contributors',
     });
 
     tileLayer.addTo(mapRef.current);
@@ -300,15 +338,18 @@ export default function MapView({
     }
 
     if (showWeatherRadar && !settings.isOfflineMode && !offlineSimulate) {
-      // 1. Add RainViewer Real-time Radar Tile Overlay for Peninsular Malaysia
-      const rainRadarUrl = 'https://tilecache.rainviewer.com/v2/radar/nowcast/{z}/{x}/{y}/2/1_1.png';
-      const weatherTile = L.tileLayer(rainRadarUrl, {
-        maxZoom: 18,
-        opacity: 0.62,
-        zIndex: 10,
-      });
-      weatherTile.addTo(mapRef.current);
-      weatherLayerRef.current = weatherTile;
+      // 1. Add RainViewer's real radar tile overlay (path comes from their live manifest —
+      // there's no fixed tile URL) for Greater Jakarta
+      if (radarHost && activeRadarPath) {
+        const rainRadarUrl = `${radarHost}${activeRadarPath}/256/{z}/{x}/{y}/2/1_1.png`;
+        const weatherTile = L.tileLayer(rainRadarUrl, {
+          maxZoom: 18,
+          opacity: 0.62,
+          zIndex: 10,
+        });
+        weatherTile.addTo(mapRef.current);
+        weatherLayerRef.current = weatherTile;
+      }
 
       // 2. Render Precipitation Density Hazard Cells on map
       LIVE_RAIN_CELLS.forEach((cell) => {
@@ -386,7 +427,7 @@ export default function MapView({
         }
       });
     }
-  }, [showWeatherRadar, settings.isOfflineMode, offlineSimulate, mapType, mapVersion]);
+  }, [showWeatherRadar, settings.isOfflineMode, offlineSimulate, mapType, mapVersion, radarHost, activeRadarPath]);
 
   // Radar Animation playback frame effect
   useEffect(() => {
@@ -876,16 +917,16 @@ export default function MapView({
     setShowZoomMenu(false);
   };
 
-  const handleQuickZoomPreset = (region: 'kl' | 'north' | 'port_klang' | 'peninsular') => {
+  const handleQuickZoomPreset = (region: 'tangerang' | 'airport' | 'bsd' | 'jabodetabek') => {
     if (!mapRef.current) return;
-    if (region === 'kl') {
-      mapRef.current.flyTo([3.1390, 101.6869], 12, { animate: true, duration: 1.2 });
-    } else if (region === 'north') {
-      mapRef.current.flyTo([4.5975, 101.0901], 10, { animate: true, duration: 1.2 });
-    } else if (region === 'port_klang') {
-      mapRef.current.flyTo([2.9900, 101.3500], 13, { animate: true, duration: 1.2 });
-    } else if (region === 'peninsular') {
-      mapRef.current.flyTo([4.2105, 101.9758], 7, { animate: true, duration: 1.2 });
+    if (region === 'tangerang') {
+      mapRef.current.flyTo([-6.1783, 106.6319], 12, { animate: true, duration: 1.2 });
+    } else if (region === 'bsd') {
+      mapRef.current.flyTo([-6.3020, 106.6528], 13, { animate: true, duration: 1.2 });
+    } else if (region === 'airport') {
+      mapRef.current.flyTo([-6.1256, 106.6559], 13, { animate: true, duration: 1.2 });
+    } else if (region === 'jabodetabek') {
+      mapRef.current.flyTo([-6.2088, 106.8456], 9, { animate: true, duration: 1.2 });
     }
     setShowZoomMenu(false);
   };
@@ -893,12 +934,12 @@ export default function MapView({
   // --- HANDLER: EXPORT MAP STATE ---
   const getMapStateData = () => {
     const map = mapRef.current;
-    const center = map ? map.getCenter() : { lat: 3.0, lng: 101.65 };
+    const center = map ? map.getCenter() : { lat: -6.1783, lng: 106.6319 };
     const zoom = map ? map.getZoom() : 11;
     const bounds = map ? map.getBounds() : null;
 
     return {
-      appName: 'Malaysia Fleet Digital Command Desk',
+      appName: 'Indonesia Fleet Digital Command Desk',
       exportedAt: new Date().toISOString(),
       mapViewport: {
         center: {
@@ -1039,13 +1080,13 @@ export default function MapView({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="font-bold text-sm tracking-wide">MALAYSIA LOGISTICS DESK</h2>
+              <h2 className="font-bold text-sm tracking-wide">TANGERANG LOGISTICS DESK</h2>
               <span className="bg-emerald-500/20 text-emerald-400 text-[9px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-1">
                 <Wifi className="w-2.5 h-2.5" /> LIVE FEED
               </span>
             </div>
             <p className="text-[10px] text-slate-400 font-mono">
-              Central Coord: {selectedVehicle ? `${selectedVehicle.location.lat.toFixed(4)}, ${selectedVehicle.location.lng.toFixed(4)}` : 'Kuala Lumpur'}
+              Central Coord: {selectedVehicle ? `${selectedVehicle.location.lat.toFixed(4)}, ${selectedVehicle.location.lng.toFixed(4)}` : 'Tangerang'}
             </p>
           </div>
         </div>
@@ -1121,18 +1162,32 @@ export default function MapView({
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
                 </h4>
                 <p className="text-[10px] text-slate-400 font-mono">
-                  Peninsular Malaysia Doppler Weather Radar
+                  Greater Jakarta (Jabodetabek) Doppler Weather Radar
                 </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowWeatherHud(!showWeatherHud)}
-              className="text-slate-400 hover:text-white text-[10px] font-bold px-2 py-1 rounded bg-slate-800/80 hover:bg-slate-800 transition cursor-pointer"
-            >
-              {showWeatherHud ? 'Collapse HUD' : 'Expand Radar'}
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowWeatherHud(!showWeatherHud)}
+                title={showWeatherHud ? 'Minimize' : 'Expand'}
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 transition cursor-pointer"
+              >
+                {showWeatherHud ? <Minus className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWeatherRadar(false);
+                  if (onUpdateSettings) onUpdateSettings({ showWeather: false });
+                }}
+                title="Close"
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           {showWeatherHud && (
@@ -1462,43 +1517,24 @@ export default function MapView({
           
           {showLayerMenu && (
             <div className="absolute right-0 mt-2 bg-white rounded-xl shadow-2xl p-2 border border-slate-100 w-44 flex flex-col gap-1 z-30">
-              <p className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">Free Google Layers</p>
+              <p className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">Map Layers</p>
               <button
-                id="layer-google-road"
-                onClick={() => { setMapType('google_road'); setShowLayerMenu(false); }}
+                id="layer-street"
+                onClick={() => { setMapType('street'); setShowLayerMenu(false); }}
                 className={`text-left px-3 py-1.5 text-xs rounded-lg transition-all font-medium cursor-pointer ${
-                  mapType === 'google_road' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+                  mapType === 'street' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                Google Road Map
+                Street Map
               </button>
               <button
-                id="layer-google-sat"
-                onClick={() => { setMapType('google_satellite'); setShowLayerMenu(false); }}
+                id="layer-satellite"
+                onClick={() => { setMapType('satellite'); setShowLayerMenu(false); }}
                 className={`text-left px-3 py-1.5 text-xs rounded-lg transition-all font-medium cursor-pointer ${
-                  mapType === 'google_satellite' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+                  mapType === 'satellite' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                Google Satellite
-              </button>
-              <button
-                id="layer-google-hybrid"
-                onClick={() => { setMapType('google_hybrid'); setShowLayerMenu(false); }}
-                className={`text-left px-3 py-1.5 text-xs rounded-lg transition-all font-medium cursor-pointer ${
-                  mapType === 'google_hybrid' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                Google Hybrid
-              </button>
-              <p className="text-[10px] font-bold text-slate-400 px-2 py-1 mt-1 border-t border-slate-100 uppercase tracking-wider">Open Source Fallback</p>
-              <button
-                id="layer-osm"
-                onClick={() => { setMapType('osm'); setShowLayerMenu(false); }}
-                className={`text-left px-3 py-1.5 text-xs rounded-lg transition-all font-medium cursor-pointer ${
-                  mapType === 'osm' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                OpenStreetMap
+                Satellite
               </button>
             </div>
           )}
@@ -1548,28 +1584,28 @@ export default function MapView({
 
               <p className="text-[10px] font-bold text-slate-400 px-2 py-1 mt-1 border-t border-slate-100 uppercase tracking-wider">Quick Region Presets</p>
               <button
-                onClick={() => handleQuickZoomPreset('kl')}
+                onClick={() => handleQuickZoomPreset('tangerang')}
                 className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-slate-100 text-slate-700 font-medium transition cursor-pointer"
               >
-                📍 Greater Klang Valley &amp; KL
+                📍 Tangerang City Center
               </button>
               <button
-                onClick={() => handleQuickZoomPreset('port_klang')}
+                onClick={() => handleQuickZoomPreset('airport')}
                 className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-slate-100 text-slate-700 font-medium transition cursor-pointer"
               >
-                🚢 Port Klang Cargo Gateway
+                ✈️ Soekarno-Hatta Airport
               </button>
               <button
-                onClick={() => handleQuickZoomPreset('north')}
+                onClick={() => handleQuickZoomPreset('bsd')}
                 className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-slate-100 text-slate-700 font-medium transition cursor-pointer"
               >
-                🛣️ Northern Highway Corridor
+                🏙️ BSD City &amp; Serpong
               </button>
               <button
-                onClick={() => handleQuickZoomPreset('peninsular')}
+                onClick={() => handleQuickZoomPreset('jabodetabek')}
                 className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-slate-100 text-slate-700 font-medium transition cursor-pointer"
               >
-                🇲🇾 Peninsular Malaysia Overview
+                🇮🇩 Jabodetabek Overview
               </button>
             </div>
           )}

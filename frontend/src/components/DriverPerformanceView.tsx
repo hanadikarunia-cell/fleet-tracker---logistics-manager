@@ -752,15 +752,15 @@ export default function DriverPerformanceView({
 
               {/* Printable Report Canvas */}
               <div className="p-8 space-y-6 flex-1 text-xs text-slate-700 font-sans leading-relaxed">
-                {/* AirAsia Brand Header */}
+                {/* Brand Header */}
                 <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
                   <div>
-                    <h1 className="text-xl font-black text-slate-900 tracking-wide">AIRASIA TRANSPORT LOGISTICS</h1>
+                    <h1 className="text-xl font-black text-slate-900 tracking-wide">TANGERANG TRANSPORT LOGISTICS</h1>
                     <p className="text-[10px] text-slate-400 uppercase font-mono tracking-widest font-extrabold mt-0.5">Fleet Telematics & Compliance Division</p>
-                    <p className="text-[10px] text-slate-400 font-medium">Jalan KLIA, Sepang, Selangor, Malaysia</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Jalan Sedyatmo, Tangerang, Banten, Indonesia</p>
                   </div>
                   <div className="text-right font-mono text-[10px] space-y-0.5">
-                    <p className="font-bold text-slate-800">AUDIT ID: <span className="font-extrabold text-indigo-600">KL-{selectedDriver.vehicleId}-{selectedDriver.safetyScore}</span></p>
+                    <p className="font-bold text-slate-800">AUDIT ID: <span className="font-extrabold text-indigo-600">TNG-{selectedDriver.vehicleId}-{selectedDriver.safetyScore}</span></p>
                     <p className="text-slate-500">DATE: 2026-07-20</p>
                     <p className="text-slate-500">STATUS: OFFICIAL RECORD</p>
                   </div>
@@ -882,7 +882,7 @@ export default function DriverPerformanceView({
                 {/* Signoff */}
                 <div className="flex justify-between items-center pt-4 border-t border-slate-200/60 text-[10px] text-slate-400">
                   <div>
-                    <p className="font-extrabold uppercase text-slate-600 tracking-wider font-mono">Signed: AirAsia Safety Comptroller</p>
+                    <p className="font-extrabold uppercase text-slate-600 tracking-wider font-mono">Signed: Tangerang Fleet Safety Comptroller</p>
                     <p className="italic font-serif text-[11px] text-slate-500 mt-1">Siti Aminah</p>
                   </div>
                   <div className="text-right text-[9px] font-mono font-bold uppercase">
@@ -989,7 +989,7 @@ export default function DriverPerformanceView({
                     type="text"
                     value={newDriverPhone}
                     onChange={(e) => setNewDriverPhone(e.target.value)}
-                    placeholder="e.g. +60 11-1234 5678"
+                    placeholder="e.g. +62 811-2345-678"
                     className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition font-medium text-slate-800 bg-slate-50"
                   />
                 </div>
@@ -1003,7 +1003,7 @@ export default function DriverPerformanceView({
                     type="email"
                     value={newDriverEmail}
                     onChange={(e) => setNewDriverEmail(e.target.value)}
-                    placeholder="e.g. farhan.driver@airasia.com"
+                    placeholder="e.g. farhan.driver@tangerangfleet.co.id"
                     className="w-full p-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition font-medium text-slate-800 bg-slate-50"
                   />
                 </div>

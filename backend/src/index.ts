@@ -11,6 +11,14 @@ const app = express();
 app.use(cors({ origin: process.env.CORS_ORIGIN ?? '*' }));
 app.use(express.json());
 
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'Fleet Tracker API',
+    status: 'ok',
+    docs: 'This is a JSON API, not a web page. See /api/health and /api/vehicles.',
+  });
+});
+
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.use('/api/positions', positionsRouter);

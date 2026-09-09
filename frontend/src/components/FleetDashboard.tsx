@@ -86,7 +86,7 @@ export default function FleetDashboard({
   const [newRouteWaypoints, setNewRouteWaypoints] = useState('');
 
   // --- CLIMATE & METEOROLOGICAL STATE ---
-  const [selectedClimateZone, setSelectedClimateZone] = useState<string>('Kuala Lumpur Depot Route');
+  const [selectedClimateZone, setSelectedClimateZone] = useState<string>('Tangerang Depot Route');
   const [customClimateTemp, setCustomClimateTemp] = useState<number>(31);
   const [customClimateHumidity, setCustomClimateHumidity] = useState<number>(85);
   const [customClimatePrecip, setCustomClimatePrecip] = useState<string>('Heavy Monsoon Showers');
@@ -128,7 +128,7 @@ export default function FleetDashboard({
     document.body.removeChild(link);
   };
 
-  const FUEL_PRICE_PER_LITER = 3.25;
+  const FUEL_PRICE_PER_LITER = 10000; // Rp per liter (Pertalite average)
 
   const fuelCostChartData = vehicles.map((v) => {
     const odo = v.odometer ?? 0;
@@ -345,8 +345,8 @@ export default function FleetDashboard({
       {
         id: `TRIP-${vehicleId}-902`,
         date: '2026-07-19',
-        origin: 'Kuala Lumpur HQ Depot',
-        destination: 'KUL Airport Cargo Terminal',
+        origin: 'Tangerang HQ Depot',
+        destination: 'CGK Airport Cargo Terminal',
         distanceKm: Math.round((50 + (hash % 20)) * 10) / 10,
         durationMins: 45 + (hash % 15),
         fuelConsumedL: Math.round((8 + (hash % 6)) * 10) / 10,
@@ -361,8 +361,8 @@ export default function FleetDashboard({
       {
         id: `TRIP-${vehicleId}-901`,
         date: '2026-07-18',
-        origin: 'KUL Airport Cargo Terminal',
-        destination: 'Subang Cargo Center',
+        origin: 'CGK Airport Cargo Terminal',
+        destination: 'BSD Logistics Hub',
         distanceKm: Math.round((60 + (hash % 12)) * 10) / 10,
         durationMins: 55 + (hash % 10),
         fuelConsumedL: Math.round((10 + (hash % 4)) * 10) / 10,
@@ -371,14 +371,14 @@ export default function FleetDashboard({
         harshAccels: hash % 2,
         idleMin: 10 + (hash % 6),
         safetyScore: Math.max(80, Math.min(100, 95 - (hash % 8))),
-        cargoType: 'Express AirAsia Courier Pallets',
+        cargoType: 'Express Nusantara Courier Pallets',
         weather: 'Monsoon Wind Squalls'
       },
       {
         id: `TRIP-${vehicleId}-900`,
         date: '2026-07-15',
-        origin: 'Penang Airport Hub',
-        destination: 'Kuala Lumpur HQ Depot',
+        origin: 'Bandung Airport Hub',
+        destination: 'Tangerang HQ Depot',
         distanceKm: 348.0,
         durationMins: 240 + (hash % 30),
         fuelConsumedL: Math.round((55 + (hash % 10)) * 10) / 10,
@@ -1281,7 +1281,7 @@ export default function FleetDashboard({
               <Coins className="w-5 h-5 text-amber-500 shrink-0" /> Fuel Cost Audit & Refueling Projections
             </h4>
             <p className="text-[11px] text-slate-500">
-              Analysis of lifetime spent fuel costs, current fuel asset value, and projected refueling top-up costs based on RM 3.25 / Liter average price.
+              Analysis of lifetime spent fuel costs, current fuel asset value, and projected refueling top-up costs based on Rp 10,000 / Liter average price.
             </p>
           </div>
           <button
@@ -1298,7 +1298,7 @@ export default function FleetDashboard({
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">Fleet Lifetime Fuel Spent</span>
             <span className="block text-xl font-black text-slate-800 mt-1 font-mono">
-              RM {totalSpentCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              Rp {totalSpentCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </span>
             <span className="block text-[9px] text-slate-500 mt-0.5">Estimated on {totalFleetOdometer.toLocaleString()} km cumulative mileage</span>
           </div>
@@ -1306,7 +1306,7 @@ export default function FleetDashboard({
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">Current Fuel Asset Value</span>
             <span className="block text-xl font-black text-emerald-600 mt-1 font-mono">
-              RM {totalCurrentValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              Rp {totalCurrentValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </span>
             <span className="block text-[9px] text-slate-500 mt-0.5">Value of {totalFuelLiters} Liters currently in fleet tanks</span>
           </div>
@@ -1314,7 +1314,7 @@ export default function FleetDashboard({
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">Projected Cost to Fill (100%)</span>
             <span className="block text-xl font-black text-rose-600 mt-1 font-mono">
-              RM {totalRefuelCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              Rp {totalRefuelCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </span>
             <span className="block text-[9px] text-slate-500 mt-0.5">Top-up required: {totalRefuelLiters.toFixed(1)} Liters across fleet</span>
           </div>
@@ -1357,11 +1357,11 @@ export default function FleetDashboard({
                   <div className="text-right font-mono text-[11px] shrink-0">
                     <div>
                       <span className="text-slate-400 font-medium">In Tank: </span>
-                      <span className="text-emerald-600 font-bold">RM {item.currentValue.toFixed(2)}</span>
+                      <span className="text-emerald-600 font-bold">Rp {item.currentValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                     </div>
                     <div className="mt-0.5">
                       <span className="text-slate-400 font-medium">To Fill: </span>
-                      <span className="text-rose-600 font-bold">RM {item.refuelCost.toFixed(2)}</span>
+                      <span className="text-rose-600 font-bold">Rp {item.refuelCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                     </div>
                   </div>
                 </div>
@@ -1689,7 +1689,7 @@ export default function FleetDashboard({
                       <h5 className="font-bold text-slate-800 text-[11px]">{v.name}</h5>
                       <span className="text-[9px] font-mono font-bold text-slate-400 block">{v.licensePlate}</span>
                       <span className="text-[8px] text-indigo-500 font-extrabold block mt-0.5">
-                        {v.routeFrom || 'Kuala Lumpur HQ'} ➡️ {v.routeTo || 'KUL Terminal'}
+                        {v.routeFrom || 'Tangerang HQ'} ➡️ {v.routeTo || 'CGK Terminal'}
                       </span>
                     </div>
                   </div>
@@ -1720,7 +1720,7 @@ export default function FleetDashboard({
               <Brain className="w-4 h-4 text-emerald-500" /> AI-Powered Logistics Route & Fuel Path Optimizer
             </h4>
             <p className="text-[11px] text-slate-500">
-              Configuring multi-waypoint flight/depot schedules to bypass Malaysian toll grid traffic bottlenecks and reduce Jet-A1 proxy fuel.
+              Configuring multi-waypoint flight/depot schedules to bypass Indonesian toll grid traffic bottlenecks and reduce Jet-A1 proxy fuel.
             </p>
           </div>
 
@@ -1740,7 +1740,7 @@ export default function FleetDashboard({
                 setIsSolvingRoute(true);
                 setTimeout(() => {
                   setIsSolvingRoute(false);
-                  alert('Heuristic solver complete! AI successfully mapped path optimizations across Peninsular Malaysia with 14.2% projected cargo fuel reduction!');
+                  alert('Heuristic solver complete! AI successfully mapped path optimizations across Greater Jakarta with 14.2% projected cargo fuel reduction!');
                 }, 1500);
               }}
               disabled={isSolvingRoute}
@@ -1796,9 +1796,9 @@ export default function FleetDashboard({
                 <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-emerald-200 -translate-y-1/2"></div>
                 <div className="flex justify-between relative z-10 gap-2">
                   {(customRoutes.find(r => r.id === optimizedRouteId)?.waypoints || [
-                    { ptNode: 'KLIA Hub', code: 'KUL' },
-                    { ptNode: 'Subang SkyLink', code: 'SZB' },
-                    { ptNode: 'Penang Hub', code: 'PEN' }
+                    { ptNode: 'CGK Cargo Hub', code: 'CGK' },
+                    { ptNode: 'Serpong SkyLink', code: 'SPG' },
+                    { ptNode: 'Bandung Hub', code: 'BDO' }
                   ]).map((pt, idx) => (
                     <div key={idx} className="flex flex-col items-center">
                       <div className="w-7 h-7 rounded-full bg-emerald-100 border-2 border-emerald-500 flex items-center justify-center text-[10px] font-bold text-emerald-700 font-mono shadow-xs">
@@ -1819,8 +1819,8 @@ export default function FleetDashboard({
                     optimizedRouteId === 'R-01' 
                       ? 'AI routing selects North-South Highway bypass via alternative Trunk Route E6. Resolves congestion bottleneck near Seremban tollway grid.'
                       : optimizedRouteId === 'R-02'
-                      ? 'Short transfer optimization bypasses LDP peak hours by re-routing through Shah Alam Expressway (KESAS) corridor and Elite link.'
-                      : 'Ipoh central bypass highway route selected. Bypasses narrow mountain curves to maintain speed stabilization and maximize fuel economy.'
+                      ? 'Short transfer optimization bypasses JORR peak hours by re-routing through Jakarta-Merak Toll (Cikupa) corridor and BSD link.'
+                      : 'Puncak Pass central bypass highway route selected. Bypasses narrow mountain curves to maintain speed stabilization and maximize fuel economy.'
                   )}
                 </p>
               </div>
@@ -1886,7 +1886,7 @@ export default function FleetDashboard({
                   id="dash-modal-route-title"
                   type="text"
                   required
-                  placeholder="e.g. KUL Depot ➡️ Malacca Hub"
+                  placeholder="e.g. TNG Depot ➡️ Bandung Hub"
                   value={newRouteTitle}
                   onChange={(e) => setNewRouteTitle(e.target.value)}
                   className="p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
@@ -1900,7 +1900,7 @@ export default function FleetDashboard({
                     id="dash-modal-route-from"
                     type="text"
                     required
-                    placeholder="e.g. Kuala Lumpur HQ Depot"
+                    placeholder="e.g. Tangerang HQ Depot"
                     value={newRouteFrom}
                     onChange={(e) => setNewRouteFrom(e.target.value)}
                     className="p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
@@ -1912,7 +1912,7 @@ export default function FleetDashboard({
                     id="dash-modal-route-to"
                     type="text"
                     required
-                    placeholder="e.g. Malacca Cargo Hub"
+                    placeholder="e.g. Bandung Cargo Hub"
                     value={newRouteTo}
                     onChange={(e) => setNewRouteTo(e.target.value)}
                     className="p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
@@ -1926,7 +1926,7 @@ export default function FleetDashboard({
                   <input
                     id="dash-modal-route-code"
                     type="text"
-                    placeholder="e.g. KUL-MAL-DIR"
+                    placeholder="e.g. TNG-BDO-DIR"
                     value={newRouteCode}
                     onChange={(e) => setNewRouteCode(e.target.value)}
                     className="p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white font-mono uppercase"
@@ -2266,11 +2266,11 @@ export default function FleetDashboard({
               onChange={(e) => setSelectedClimateZone(e.target.value)}
               className="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700 rounded-lg px-2.5 py-1.5 cursor-pointer outline-none focus:ring-1 focus:ring-indigo-500"
             >
-              <option value="Kuala Lumpur Depot Route">Kuala Lumpur Depot Corridor</option>
-              <option value="Sepang Cargo Center Highway">Sepang ELITE Highway Route</option>
-              <option value="Subang Airport Route">Subang Skypark Transit Corridor</option>
-              <option value="Penang Logistics Hub">Penang Bayan Lepas Transit</option>
-              <option value="Johor South Corridor">Johor Senai Airport Route</option>
+              <option value="Tangerang Depot Route">Tangerang Depot Corridor</option>
+              <option value="Cengkareng Cargo Center Highway">Cengkareng Toll Highway Route</option>
+              <option value="BSD Airport Route">BSD Serpong Transit Corridor</option>
+              <option value="Bandung Logistics Hub">Bandung Husein Sastranegara Transit</option>
+              <option value="Bekasi East Corridor">Bekasi Cikarang Corridor</option>
             </select>
           </div>
         </div>
@@ -2502,9 +2502,9 @@ export default function FleetDashboard({
                           <span className="font-mono text-[9px]">{v.licensePlate}</span>
                         </div>
                         <div className="text-[9px] text-indigo-600 font-bold flex items-center gap-1 mt-0.5">
-                          <span className="truncate max-w-[100px]">{v.routeFrom || 'Kuala Lumpur HQ'}</span>
+                          <span className="truncate max-w-[100px]">{v.routeFrom || 'Tangerang HQ'}</span>
                           <span className="text-slate-300 shrink-0">➡️</span>
-                          <span className="truncate max-w-[100px]">{v.routeTo || 'KUL Terminal'}</span>
+                          <span className="truncate max-w-[100px]">{v.routeTo || 'CGK Terminal'}</span>
                         </div>
                       </div>
                     </div>
@@ -2741,7 +2741,7 @@ COMPLIANCE VERDICT       : ${activeTrip.safetyScore >= 90 ? 'OUTSTANDING COMPLIA
 
 ------------------------------------------------------------------------
                         OFFICIAL SIGNATURE DOCK
-   Prepared under digital seal of AirAsia Logistics Systems Fleet Operations.
+   Prepared under digital seal of Tangerang Logistics Systems Fleet Operations.
 ========================================================================`;
 
             const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8;' });

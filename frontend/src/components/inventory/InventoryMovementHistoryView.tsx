@@ -29,7 +29,7 @@ export default function InventoryMovementHistoryView({
   const [selectedItemId, setSelectedItemId] = useState<string>('');
   const [movementType, setMovementType] = useState<'restock' | 'transfer' | 'dispatch' | 'audit_adjustment'>('transfer');
   const [quantityDelta, setQuantityDelta] = useState<number>(10);
-  const [fromLocation, setFromLocation] = useState('Kuala Lumpur HQ Depot');
+  const [fromLocation, setFromLocation] = useState('Tangerang HQ Depot');
   const [toLocation, setToLocation] = useState('Rapid Van 01 (V-101)');
   const [performedBy, setPerformedBy] = useState('Hafiz Rahim (Inventory Lead)');
   const [notes, setNotes] = useState('');

@@ -19,7 +19,7 @@ const SAMPLE_TRANSMISSIONS: DispatchTransmission[] = [
   {
     id: 'tx_101',
     timestamp: '10:42 AM',
-    channel: 'Channel 1 - Klang Corridor',
+    channel: 'Channel 1 - Merak Corridor',
     sender: 'Dispatch AI Operator',
     message: 'Rerouting Hauler Heavy #204 around Federal Highway congestion via E6 Bypass.',
     status: 'Dispatched',
@@ -30,7 +30,7 @@ const SAMPLE_TRANSMISSIONS: DispatchTransmission[] = [
     timestamp: '10:38 AM',
     channel: 'Channel 2 - Northern Fleet',
     sender: 'Driver Ahmad Rizwan (V102)',
-    message: 'Cargo load 402 secured at Shah Alam Hub. Proceeding to KLIA Cargo Terminal.',
+    message: 'Cargo load 402 secured at Cikupa Hub. Proceeding to CGK Cargo Terminal.',
     status: 'Acknowledged',
     audioWave: [25, 60, 40, 75, 85, 30, 10, 50],
   },
@@ -50,7 +50,7 @@ interface VoiceDispatchControlRoomProps {
 }
 
 export default function VoiceDispatchControlRoom({ vehicles = [] }: VoiceDispatchControlRoomProps) {
-  const [activeChannel, setActiveChannel] = useState('Channel 1 - Klang Corridor');
+  const [activeChannel, setActiveChannel] = useState('Channel 1 - Merak Corridor');
   const [transmissions, setTransmissions] = useState<DispatchTransmission[]>(SAMPLE_TRANSMISSIONS);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -125,7 +125,7 @@ export default function VoiceDispatchControlRoom({ vehicles = [] }: VoiceDispatc
             onChange={(e) => setActiveChannel(e.target.value)}
             className="bg-transparent text-xs font-extrabold text-white outline-none cursor-pointer"
           >
-            <option value="Channel 1 - Klang Corridor" className="bg-slate-900 text-white">Channel 1 - Klang Corridor</option>
+            <option value="Channel 1 - Merak Corridor" className="bg-slate-900 text-white">Channel 1 - Merak Corridor</option>
             <option value="Channel 2 - Northern Fleet" className="bg-slate-900 text-white">Channel 2 - Northern Fleet</option>
             <option value="Channel 3 - Cold Chain Ops" className="bg-slate-900 text-white">Channel 3 - Cold Chain Ops</option>
           </select>
@@ -152,7 +152,7 @@ export default function VoiceDispatchControlRoom({ vehicles = [] }: VoiceDispatc
               <Zap className="w-4 h-4 text-indigo-600" /> Voice Dispatch Speech Terminal
             </span>
             <p className="text-sm font-bold text-slate-900">
-              {isListening ? transcript : 'Tap mic to speak dispatch commands e.g. "Reroute Hauler #204 to Port Klang"'}
+              {isListening ? transcript : 'Tap mic to speak dispatch commands e.g. "Reroute Hauler #204 to Tanjung Priok"'}
             </p>
             <p className="text-xs text-slate-400">Speech synthesis feedback is active for all drivers on {activeChannel}</p>
           </div>

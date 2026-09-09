@@ -9,7 +9,7 @@ interface VoiceCommandDispatchBarProps {
 }
 
 const PRESET_VOICE_COMMANDS = [
-  'Dispatch Hauler Heavy #204 to Port Klang Container Terminal',
+  'Dispatch Hauler Heavy #204 to Tanjung Priok Container Terminal',
   'Check Fleet Battery Health and SOC Status',
   'Show Critical Maintenance Alerts and OBD Diagnostic Codes',
   'Assign Cargo Load 402 to Rapid Express Van #102',

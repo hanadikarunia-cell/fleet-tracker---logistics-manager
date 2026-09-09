@@ -27,9 +27,9 @@ export default function InventoryDensityMapView({
   // Define location hubs with realistic volumetric & weight limits
   const locationHubs: CapacityLocationHub[] = useMemo(() => {
     const hubs: CapacityLocationHub[] = [
-      { id: 'wh_kl', name: 'Kuala Lumpur HQ Depot', type: 'warehouse', maxWeightKg: 15000, maxVolumeM3: 500 },
-      { id: 'wh_penang', name: 'Penang Regional Hub', type: 'warehouse', maxWeightKg: 8000, maxVolumeM3: 300 },
-      { id: 'wh_johor', name: 'Johor Distribution Center', type: 'warehouse', maxWeightKg: 10000, maxVolumeM3: 350 },
+      { id: 'wh_tng', name: 'Tangerang HQ Depot', type: 'warehouse', maxWeightKg: 15000, maxVolumeM3: 500 },
+      { id: 'wh_bdo', name: 'Bandung Regional Hub', type: 'warehouse', maxWeightKg: 8000, maxVolumeM3: 300 },
+      { id: 'wh_bks', name: 'Bekasi Distribution Center', type: 'warehouse', maxWeightKg: 10000, maxVolumeM3: 350 },
     ];
 
     vehicles.forEach(v => {
@@ -53,9 +53,9 @@ export default function InventoryDensityMapView({
           return item.assignedVehicleId === hub.id;
         } else {
           // Warehouses: match unassigned or specific location string
-          if (hub.id === 'wh_kl') return !item.assignedVehicleId || item.location.includes('Kuala Lumpur') || item.location.includes('HQ');
-          if (hub.id === 'wh_penang') return item.location.includes('Penang');
-          if (hub.id === 'wh_johor') return item.location.includes('Johor');
+          if (hub.id === 'wh_tng') return !item.assignedVehicleId || item.location.includes('Tangerang') || item.location.includes('HQ');
+          if (hub.id === 'wh_bdo') return item.location.includes('Bandung');
+          if (hub.id === 'wh_bks') return item.location.includes('Bekasi');
           return false;
         }
       });

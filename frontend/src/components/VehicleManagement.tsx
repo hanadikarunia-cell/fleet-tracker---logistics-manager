@@ -17,7 +17,7 @@ interface VehicleManagementProps {
 }
 
 const VEHICLE_COLORS = [
-  { name: 'AirAsia Red', hex: '#E11D48' },
+  { name: 'Nusantara Red', hex: '#E11D48' },
   { name: 'Sky Blue', hex: '#3B82F6' },
   { name: 'Emerald Green', hex: '#10B981' },
   { name: 'Amber Gold', hex: '#F59E0B' },
@@ -79,7 +79,7 @@ export default function VehicleManagement({
       cargoWeight: 0,
       maxCargoWeight: Number(formMaxWeight),
       driverName: formDriver || 'Unassigned Driver',
-      driverPhone: formPhone || '+60 12-000 0000',
+      driverPhone: formPhone || '+62 812-0000-0000',
       avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150', // placeholder
       iconColor: formColor,
       odometer: editingVehicleId 
@@ -88,8 +88,8 @@ export default function VehicleManagement({
       engineHours: editingVehicleId 
         ? (vehicles.find(v => v.id === editingVehicleId)?.engineHours ?? 0) 
         : 0,
-      routeFrom: formRouteFrom || 'Kuala Lumpur HQ Depot',
-      routeTo: formRouteTo || 'KUL Airport Cargo Terminal',
+      routeFrom: formRouteFrom || 'Tangerang HQ Depot',
+      routeTo: formRouteTo || 'CGK Airport Cargo Terminal',
     };
 
     if (editingVehicleId) {
@@ -312,7 +312,7 @@ export default function VehicleManagement({
                 required
                 value={formPhone}
                 onChange={(e) => setFormPhone(e.target.value)}
-                placeholder="+60 1x-xxx xxxx"
+                placeholder="+62 8xx-xxxx-xxxx"
                 className="p-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -395,7 +395,7 @@ export default function VehicleManagement({
                     type="text"
                     value={formRouteFrom}
                     onChange={(e) => setFormRouteFrom(e.target.value)}
-                    placeholder="e.g. Kuala Lumpur HQ Depot"
+                    placeholder="e.g. Tangerang HQ Depot"
                     className="p-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   />
                 </div>
@@ -407,7 +407,7 @@ export default function VehicleManagement({
                     type="text"
                     value={formRouteTo}
                     onChange={(e) => setFormRouteTo(e.target.value)}
-                    placeholder="e.g. KUL Airport Cargo Terminal"
+                    placeholder="e.g. CGK Airport Cargo Terminal"
                     className="p-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   />
                 </div>
@@ -552,12 +552,12 @@ export default function VehicleManagement({
                 <div className="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-lg border border-slate-100">
                   <div className="min-w-0 flex-1">
                     <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wide">Origin (From)</p>
-                    <p className="font-extrabold text-slate-700 truncate text-[11px]">{v.routeFrom || 'Kuala Lumpur HQ Depot'}</p>
+                    <p className="font-extrabold text-slate-700 truncate text-[11px]">{v.routeFrom || 'Tangerang HQ Depot'}</p>
                   </div>
                   <div className="text-slate-350 px-1 font-extrabold text-xs">➡️</div>
                   <div className="min-w-0 flex-1 text-right">
                     <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wide">Destination (To)</p>
-                    <p className="font-extrabold text-slate-700 truncate text-[11px]">{v.routeTo || 'KUL Airport Cargo Terminal'}</p>
+                    <p className="font-extrabold text-slate-700 truncate text-[11px]">{v.routeTo || 'CGK Airport Cargo Terminal'}</p>
                   </div>
                 </div>
               </div>
@@ -621,7 +621,7 @@ export default function VehicleManagement({
                   id="modal-route-title"
                   type="text"
                   required
-                  placeholder="e.g. KUL Depot ➡️ PEN Airport"
+                  placeholder="e.g. TNG Depot ➡️ BDO Airport"
                   value={newRouteTitle}
                   onChange={(e) => setNewRouteTitle(e.target.value)}
                   className="p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
@@ -635,7 +635,7 @@ export default function VehicleManagement({
                     id="modal-route-from"
                     type="text"
                     required
-                    placeholder="e.g. Kuala Lumpur HQ Depot"
+                    placeholder="e.g. Tangerang HQ Depot"
                     value={newRouteFrom}
                     onChange={(e) => setNewRouteFrom(e.target.value)}
                     className="p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
@@ -647,7 +647,7 @@ export default function VehicleManagement({
                     id="modal-route-to"
                     type="text"
                     required
-                    placeholder="e.g. Penang Airport Hub"
+                    placeholder="e.g. Bandung Airport Hub"
                     value={newRouteTo}
                     onChange={(e) => setNewRouteTo(e.target.value)}
                     className="p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
@@ -661,7 +661,7 @@ export default function VehicleManagement({
                   <input
                     id="modal-route-code"
                     type="text"
-                    placeholder="e.g. KLIA-PEN-EXP"
+                    placeholder="e.g. CGK-BDO-EXP"
                     value={newRouteCode}
                     onChange={(e) => setNewRouteCode(e.target.value)}
                     className="p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white font-mono uppercase"
@@ -672,7 +672,7 @@ export default function VehicleManagement({
                   <input
                     id="modal-route-waypoints"
                     type="text"
-                    placeholder="e.g. Ipoh, Tapah, Kampar"
+                    placeholder="e.g. Cikupa, Balaraja, Cilegon"
                     value={newRouteDesc}
                     onChange={(e) => setNewRouteDesc(e.target.value)}
                     className="p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"

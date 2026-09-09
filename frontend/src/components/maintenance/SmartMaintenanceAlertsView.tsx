@@ -58,7 +58,7 @@ const MOCK_DTC_CODES: DiagnosticTroubleCode[] = [
     severity: 'info',
     description: 'Driver Frontal Stage 1 Deployment Control Resistance Low',
     vehicleId: 'AIR-901',
-    vehicleName: 'AirAsia Cargo Airbus A320',
+    vehicleName: 'Nusantara Cargo Hauler Truck',
     timestamp: '2026-07-20 11:30',
   },
 ];

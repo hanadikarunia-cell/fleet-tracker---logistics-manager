@@ -42,7 +42,7 @@ const INITIAL_REST_LOGS: RestBreakLog[] = [
     breakType: 'meal_break',
     startTime: '2026-07-22 12:00',
     durationMinutes: 45,
-    location: 'Subang Cargo Hub Canteen',
+    location: 'BSD Cargo Hub Canteen',
     supervisorApproval: true,
     notes: 'Midday meal break completed.',
   },
@@ -53,7 +53,7 @@ const INITIAL_REST_LOGS: RestBreakLog[] = [
     breakType: 'overnight_rest',
     startTime: '2026-07-21 22:00',
     durationMinutes: 600, // 10 hrs
-    location: 'Penang Airport Transit Lodge',
+    location: 'Bandung Airport Transit Lodge',
     supervisorApproval: true,
     notes: 'Full 10-hour mandatory rest cycle completed.',
   },

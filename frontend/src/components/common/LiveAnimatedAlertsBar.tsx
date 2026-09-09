@@ -36,7 +36,7 @@ const INITIAL_LIVE_ALERTS: AnimatedAlert[] = [
     timestamp: '5 mins ago',
     type: 'info',
     vehicleName: 'Rapid Express Van #102',
-    message: 'Custom Geofence Exit: Entered Port Klang Transit Terminal Zone',
+    message: 'Custom Geofence Exit: Entered Tanjung Priok Transit Terminal Zone',
     metric: 'Zone 4B',
   },
 ];

@@ -15,10 +15,10 @@ interface WaypointDetail {
 }
 
 const SAMPLE_ROUTE_WAYPOINTS: WaypointDetail[] = [
-  { id: 'wp1', name: 'Westport Container Terminal (Klang)', distanceFromOriginKm: 0, trafficStatus: 'Clear', fuelBurnLitersPer100Km: 28.5, estSpeedKmh: 75, co2GramsPerKm: 760 },
+  { id: 'wp1', name: 'Tanjung Priok Container Terminal', distanceFromOriginKm: 0, trafficStatus: 'Clear', fuelBurnLitersPer100Km: 28.5, estSpeedKmh: 75, co2GramsPerKm: 760 },
   { id: 'wp2', name: 'Federal Highway Interchange B-12', distanceFromOriginKm: 24, trafficStatus: 'Heavy Congestion', fuelBurnLitersPer100Km: 42.1, estSpeedKmh: 22, co2GramsPerKm: 1120 },
-  { id: 'wp3', name: 'Shah Alam Cargo Hub Gate 4', distanceFromOriginKm: 48, trafficStatus: 'Moderate', fuelBurnLitersPer100Km: 33.0, estSpeedKmh: 58, co2GramsPerKm: 880 },
-  { id: 'wp4', name: 'KLIA Cargo Terminal 1 (Sepang)', distanceFromOriginKm: 86, trafficStatus: 'Clear', fuelBurnLitersPer100Km: 27.2, estSpeedKmh: 82, co2GramsPerKm: 720 },
+  { id: 'wp3', name: 'Cikupa Cargo Hub Gate 4', distanceFromOriginKm: 48, trafficStatus: 'Moderate', fuelBurnLitersPer100Km: 33.0, estSpeedKmh: 58, co2GramsPerKm: 880 },
+  { id: 'wp4', name: 'CGK Cargo Terminal 1 (Cengkareng)', distanceFromOriginKm: 86, trafficStatus: 'Clear', fuelBurnLitersPer100Km: 27.2, estSpeedKmh: 82, co2GramsPerKm: 720 },
 ];
 
 export default function RouteEfficiencyMapView() {

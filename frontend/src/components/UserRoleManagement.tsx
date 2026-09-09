@@ -373,7 +373,7 @@ export default function UserRoleManagement({
                   required
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}
-                  placeholder="e.g. farhana@airasia.com"
+                  placeholder="e.g. farhana@tangerangfleet.co.id"
                   className="p-2.5 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>

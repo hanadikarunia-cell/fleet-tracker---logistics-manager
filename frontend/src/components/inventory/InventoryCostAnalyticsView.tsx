@@ -74,7 +74,7 @@ export default function InventoryCostAnalyticsView({
     const map = new Map<string, { location: string; totalValue: number; totalUnits: number }>();
 
     itemCostData.forEach(item => {
-      const loc = item.location || 'Kuala Lumpur HQ Depot';
+      const loc = item.location || 'Tangerang HQ Depot';
       const existing = map.get(loc) || { location: loc, totalValue: 0, totalUnits: 0 };
       existing.totalValue += item.totalItemValue;
       existing.totalUnits += item.quantity;
