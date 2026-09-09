@@ -44,16 +44,8 @@ async function main() {
     .eq('id', 'GPS-101');
   if (deviceError) throw deviceError;
 
-  const { error: userError } = await supabase.from('app_users').upsert({
-    id: 'USR-01',
-    name: 'Hanadi',
-    email: 'hanadikarunia@gmail.com',
-    role: 'administrator',
-    department: 'Fleet Operations',
-  });
-  if (userError) throw userError;
-
-  console.log('Seeded V-101 / GPS-101 for the phone-as-GPS-device walkthrough, and the admin user.');
+  console.log('Seeded V-101 / GPS-101 for the phone-as-GPS-device walkthrough.');
+  console.log('Run `npm run bootstrap-admin -- <email> <password> <name>` to create the first real login.');
 }
 
 main().catch((err) => {

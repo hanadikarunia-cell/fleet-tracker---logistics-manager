@@ -39,14 +39,17 @@ Dashboard ◀──Supabase Realtime (vehicles, fleet_alerts)──┘
    `anon`/publishable key (Project Settings → API).
 2. In `backend/`, copy `.env.example` to `.env` and fill in `SUPABASE_URL`,
    `SUPABASE_SECRET_KEY`, and `DATABASE_URL`.
-3. Install and apply the schema:
+3. Install, apply the schema, and create the first login:
    ```bash
    cd backend
    npm install
-   npm run migrate   # applies backend/src/db/schema.sql
-   npm run seed       # seeds one demo device/vehicle (GPS-101 / V-101) + an admin user
+   npm run migrate                    # applies backend/src/db/schema.sql
+   npm run seed                       # seeds one demo device/vehicle (GPS-101 / V-101)
+   npm run bootstrap-admin -- you@example.com "a-strong-password" "Your Name"
    ```
-   Both are idempotent — safe to re-run.
+   All three are idempotent — safe to re-run. `bootstrap-admin` creates a real
+   Supabase Auth account plus its `admin`-role profile; that's what you log
+   into the dashboard with. See **Accounts & roles** below for how to add more.
 
 ## 2. Run the backend
 
@@ -112,11 +115,30 @@ environment variables, then deploy. The phone tracker will be live at
 After both are deployed, update the backend's `CORS_ORIGIN` to the real
 Vercel URL (it starts as a placeholder) and redeploy the backend.
 
+## Accounts & roles
+
+Login is real (Supabase Auth, email + password) — there's no demo/guest mode.
+Three roles, enforced by the backend itself (not just hidden UI):
+
+| Role | Access |
+|---|---|
+| `admin` | Everything, including GPS Hardware Register and the User & Role Center |
+| `manager` | Read/write on vehicles, geofences, alerts, maintenance, driver performance, inventory — no device hardware, no account management |
+| `viewer` | Read-only everywhere it can see |
+
+Only an admin can create accounts, from the dashboard's **User & Role Center**
+(sets an initial password directly — no email/SMTP setup required). The
+first admin account is created once via `npm run bootstrap-admin` (see
+above). Every logged-in user can change their own password from the same
+screen. `POST /api/positions` (device ingest) is the one endpoint that
+doesn't require login, since phones/trackers don't authenticate as a user.
+
 ## Notes
 
 - `SUPABASE_SECRET_KEY` (service role) must only ever live in the backend's
   environment — it bypasses Row Level Security. The frontend only ever uses
   the `anon`/publishable key, which is safe to expose in the browser (RLS
-  restricts it to read-only).
-- Row Level Security is enabled on every table with a public read policy;
-  all writes go through the backend.
+  restricts it to read-only, and `app_users` isn't publicly readable at all).
+- Row Level Security is enabled on every table; operational tables have a
+  public read policy, `app_users` has none (backend-only, via the service
+  role key plus the requireAuth/requireRole middleware).

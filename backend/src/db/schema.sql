@@ -155,17 +155,33 @@ create table if not exists location_history (
 );
 create index if not exists location_history_vehicle_ts_idx on location_history (vehicle_id, timestamp desc);
 
+-- app_users is linked 1:1 to Supabase Auth accounts (real login, not a demo persona list).
+-- If an earlier version of this schema created it with a plain text id, migrate by dropping
+-- and recreating — nothing else has a foreign key into it.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'app_users' and column_name = 'id' and data_type <> 'uuid'
+  ) then
+    drop table app_users cascade;
+  end if;
+end $$;
+
 create table if not exists app_users (
-  id text primary key,
+  id uuid primary key references auth.users(id) on delete cascade,
   name text not null,
   email text unique not null,
-  role text not null default 'viewer',
+  role text not null default 'viewer' check (role in ('admin', 'manager', 'viewer')),
   avatar text,
-  department text
+  department text,
+  created_at timestamptz not null default now()
 );
 
--- Row Level Security: browser reads via Supabase Realtime/anon key are read-only.
--- All writes go through the backend service-role key, which bypasses RLS.
+-- Row Level Security: browser reads via Supabase Realtime/anon key are read-only, and only for
+-- operational tables — never app_users, which holds real account identities. All writes (and
+-- all app_users access) go through the backend service-role key, which bypasses RLS and is
+-- gated by the requireAuth/requireRole middleware instead.
 alter table vehicles enable row level security;
 alter table gps_devices enable row level security;
 alter table geofences enable row level security;
@@ -183,7 +199,7 @@ declare
 begin
   for t in select unnest(array[
     'vehicles','gps_devices','geofences','fleet_alerts','maintenance_logs',
-    'driver_performance','inventory_items','inventory_movements','location_history','app_users'
+    'driver_performance','inventory_items','inventory_movements','location_history'
   ])
   loop
     execute format('drop policy if exists %I on %I;', 'public_read_' || t, t);

@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import { supabase } from '../supabaseClient.js';
 import { mapVehicleRow, mapVehicleRows, toSnakeRow } from '../transform.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 export const vehiclesRouter = Router();
+const writeRoles = ['admin', 'manager'];
+
+vehiclesRouter.use(requireAuth);
 
 vehiclesRouter.get('/', async (req, res) => {
   const { data, error } = await supabase.from('vehicles').select('*').order('name', { ascending: true });
@@ -41,14 +45,14 @@ vehiclesRouter.get('/:id/history', async (req, res) => {
   );
 });
 
-vehiclesRouter.post('/', async (req, res) => {
+vehiclesRouter.post('/', requireRole(writeRoles), async (req, res) => {
   const row = toSnakeRow(req.body);
   const { data, error } = await supabase.from('vehicles').insert(row).select().single();
   if (error) return res.status(400).json({ error: error.message });
   res.status(201).json(mapVehicleRow(data));
 });
 
-vehiclesRouter.put('/:id', async (req, res) => {
+vehiclesRouter.put('/:id', requireRole(writeRoles), async (req, res) => {
   const row = toSnakeRow(req.body);
   const { data, error } = await supabase.from('vehicles').update(row).eq('id', req.params.id).select().maybeSingle();
   if (error) return res.status(400).json({ error: error.message });
@@ -56,7 +60,7 @@ vehiclesRouter.put('/:id', async (req, res) => {
   res.json(mapVehicleRow(data));
 });
 
-vehiclesRouter.delete('/:id', async (req, res) => {
+vehiclesRouter.delete('/:id', requireRole(writeRoles), async (req, res) => {
   const { error } = await supabase.from('vehicles').delete().eq('id', req.params.id);
   if (error) return res.status(400).json({ error: error.message });
   res.status(204).send();

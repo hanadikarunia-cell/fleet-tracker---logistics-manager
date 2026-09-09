@@ -166,7 +166,7 @@ export interface MapSettings {
   autoPositionUpdates: boolean;
 }
 
-export type UserRole = 'administrator' | 'supervisor' | 'user' | 'viewer';
+export type UserRole = 'admin' | 'manager' | 'viewer';
 
 export interface CustomRoute {
   id: string;
@@ -183,7 +183,7 @@ export interface AppUser {
   name: string;
   email: string;
   role: UserRole;
-  avatar: string;
-  department: string;
+  avatar?: string;
+  department?: string;
 }
 

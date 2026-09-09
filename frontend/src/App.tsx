@@ -6,6 +6,7 @@ import {
 } from './types';
 import { api } from './api';
 import { supabase } from './supabaseClient';
+import LoginScreen from './LoginScreen';
 import MapView from './components/MapView';
 import FleetDashboard from './components/FleetDashboard';
 import InventorySystem from './components/InventorySystem';
@@ -18,29 +19,16 @@ import VehicleTelemetryHistoryView from './components/telemetry/VehicleTelemetry
 import PredictiveArrivalEstimatorView from './components/analytics/PredictiveArrivalEstimatorView';
 import GeofenceEfficiencyAlertView from './components/geofence/GeofenceEfficiencyAlertView';
 
+import type { Session } from '@supabase/supabase-js';
 import {
   Map, LayoutDashboard, Boxes, Users, Cpu, Truck,
   Plus, AlertOctagon, Info, Layers, Smartphone, Sparkles, Navigation, Fingerprint,
-  Volume2, VolumeX, Activity, Clock, ShieldAlert
+  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut
 } from 'lucide-react';
 
-// Fallback shown only until the real app_users list loads from the API (see the load
-// effect below), which always overwrites this with the real seeded user.
-const initialUsers: AppUser[] = [
-  {
-    id: 'USR-01',
-    name: 'Hanadi',
-    email: 'hanadikarunia@gmail.com',
-    role: 'administrator',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-    department: 'Fleet Operations'
-  }
-];
-
 export const ROLE_MODULES: Record<UserRole, string[]> = {
-  administrator: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory', 'drivers', 'vehicles', 'devices', 'users'],
-  supervisor: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory', 'drivers', 'vehicles', 'users'],
-  user: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory'],
+  admin: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory', 'drivers', 'vehicles', 'devices', 'users'],
+  manager: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory', 'drivers', 'vehicles'],
   viewer: ['map', 'dashboard', 'telemetry', 'eta', 'drivers'],
 };
 
@@ -72,10 +60,44 @@ export default function App() {
 
   const [users, setUsers] = useState<AppUser[]>([]);
 
-  const [currentUser, setCurrentUser] = useState<AppUser>(() => {
-    const saved = localStorage.getItem('fleet_current_user');
-    return saved ? JSON.parse(saved) : initialUsers[0];
-  });
+  // --- AUTH: real Supabase login, not a demo persona switcher ---
+  const [session, setSession] = useState<Session | null | undefined>(undefined); // undefined = not checked yet
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!supabase) {
+      setSession(null);
+      return;
+    }
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      if (!newSession) setCurrentUser(null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Once logged in, resolve the session into our app profile (id/name/role).
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    api.auth
+      .me()
+      .then((profile) => {
+        if (!cancelled) setCurrentUser(profile);
+      })
+      .catch((err) => {
+        if (!cancelled) setAuthError(err instanceof Error ? err.message : 'Failed to load your profile');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  const handleSignOut = () => {
+    supabase?.auth.signOut();
+  };
 
   const [customRoutes, setCustomRoutes] = useState<CustomRoute[]>(() => {
     const saved = localStorage.getItem('fleet_custom_routes');
@@ -153,15 +175,14 @@ export default function App() {
     localStorage.setItem('fleet_map_settings', JSON.stringify(mapSettings));
   }, [mapSettings]);
 
+  // Fires once we have a resolved profile (i.e. a valid session + role) so every request
+  // carries the auth token and we know which endpoints this account is even allowed to call.
   useEffect(() => {
-    localStorage.setItem('fleet_current_user', JSON.stringify(currentUser));
-  }, [currentUser]);
-
-  useEffect(() => {
+    if (!currentUser) return;
     let cancelled = false;
     (async () => {
       try {
-        const [v, d, g, a, m, inv, dp, u] = await Promise.all([
+        const [v, d, g, a, m, inv, dp] = await Promise.all([
           api.vehicles.list(),
           api.devices.list(),
           api.geofences.list(),
@@ -169,7 +190,6 @@ export default function App() {
           api.maintenance.list(),
           api.inventory.list(),
           api.driverPerformance.list(),
-          api.users.list(),
         ]);
         if (cancelled) return;
         setVehicles(v);
@@ -179,8 +199,6 @@ export default function App() {
         setMaintenance(m);
         setInventory(inv);
         setDriverPerformance(dp);
-        setUsers(u);
-        setCurrentUser((prev) => u.find((usr) => usr.id === prev.id) ?? u[0] ?? prev);
       } catch (err) {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load fleet data');
       } finally {
@@ -190,7 +208,14 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentUser?.id]);
+
+  // The account roster is admin-only (both on the backend and in the UI) — only fetch it
+  // for admins, and only once we know that's who's logged in.
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    api.users.list().then(setUsers).catch((err) => console.error('Failed to load users:', err));
+  }, [currentUser?.role]);
 
   // Live pushes: vehicle positions and new alerts stream in via Supabase Realtime
   // instead of polling. Writes still go through the backend API.
@@ -244,6 +269,7 @@ export default function App() {
 
   // Redirect to permitted tab if current active tab is unauthorized for active role
   useEffect(() => {
+    if (!currentUser) return;
     const allowed = ROLE_MODULES[currentUser.role] || [];
     if (!allowed.includes(activeTab)) {
       setActiveTab(allowed[0] as any);
@@ -680,23 +706,15 @@ export default function App() {
     setActiveTab('map');
   };
 
-  // --- USER PROFILE & ROLE OPERATIONS ---
-  const handleAddUser = async (newUserPayload: Omit<AppUser, 'id'>) => {
-    const newUser = {
-      ...newUserPayload,
-      id: 'USR-' + String(users.length + 1).padStart(2, '0'),
-    };
-    const created = await api.users.create(newUser);
+  // --- ACCOUNT MANAGEMENT (admin-only, backend-enforced) ---
+  const handleAddUser = async (newUserPayload: { name: string; email: string; role: UserRole; department?: string; password: string }) => {
+    const created = await api.users.create(newUserPayload);
     setUsers((prev) => [...prev, created]);
   };
 
   const handleUpdateUserRole = async (userId: string, newRole: UserRole) => {
     const updated = await api.users.update(userId, { role: newRole });
     setUsers((prev) => prev.map((user) => (user.id === userId ? updated : user)));
-    // If we updated our own role, sync currentUser state too!
-    if (currentUser.id === userId) {
-      setCurrentUser((prev) => ({ ...prev, role: newRole }));
-    }
   };
 
   const handleDeleteUser = async (userId: string) => {
@@ -704,14 +722,34 @@ export default function App() {
     setUsers((prev) => prev.filter((user) => user.id !== userId));
   };
 
-  const handleSwitchUser = (user: AppUser) => {
-    setCurrentUser(user);
-    // Ensure activeTab is reset to a permitted one if the selected user doesn't have access to the current activeTab
-    const allowed = ROLE_MODULES[user.role] || [];
-    if (!allowed.includes(activeTab)) {
-      setActiveTab(allowed[0] as any);
-    }
-  };
+  if (session === undefined) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-950 text-slate-400 text-sm font-semibold gap-2">
+        <Navigation className="w-5 h-5 animate-pulse text-blue-500" /> Loading...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginScreen />;
+  }
+
+  if (authError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 text-rose-600 text-sm font-semibold p-6 text-center">
+        Failed to load your account profile: {authError}. If you were just added, make sure an
+        admin created your account through the User & Role Center.
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 text-slate-500 text-sm font-semibold gap-2">
+        <Navigation className="w-5 h-5 animate-pulse text-blue-600" /> Loading your profile...
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -753,20 +791,34 @@ export default function App() {
             </div>
           </div>
 
-          {/* Active Operator Widget */}
+          {/* Signed-in Account Widget */}
           <div className="mx-4 mt-2 mb-4 p-2.5 bg-slate-800/80 rounded-xl border border-slate-700/60 flex items-center gap-2">
-            <img 
-              src={currentUser.avatar} 
-              alt={currentUser.name} 
-              className="w-7 h-7 rounded-full object-cover border border-slate-600 shrink-0"
-              referrerPolicy="no-referrer"
-            />
-            <div className="min-w-0">
+            {currentUser.avatar ? (
+              <img
+                src={currentUser.avatar}
+                alt={currentUser.name}
+                className="w-7 h-7 rounded-full object-cover border border-slate-600 shrink-0"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-blue-600 border border-slate-600 shrink-0 flex items-center justify-center text-[10px] font-black text-white">
+                {currentUser.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] font-bold text-slate-100 truncate leading-tight">{currentUser.name}</p>
               <p className="text-[8px] text-blue-400 font-extrabold uppercase tracking-widest mt-0.5">
                 🛡️ {currentUser.role}
               </p>
             </div>
+            <button
+              id="btn-sign-out"
+              onClick={handleSignOut}
+              title="Sign out"
+              className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-700 transition shrink-0"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           {/* Active Tabs Menu */}
@@ -1234,7 +1286,6 @@ export default function App() {
           {activeTab === 'users' && (
             <UserRoleManagement
               currentUser={currentUser}
-              onSwitchUser={handleSwitchUser}
               usersList={users}
               onAddUser={handleAddUser}
               onUpdateUserRole={handleUpdateUserRole}

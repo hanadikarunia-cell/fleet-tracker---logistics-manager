@@ -2,14 +2,16 @@ import type {
   Vehicle, GPSDevice, Geofence, FleetAlert, MaintenanceLog,
   DriverPerformance, InventoryItem, InventoryMovement, LocationHistoryPoint, AppUser,
 } from './types';
+import { supabase } from './supabaseClient';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+
+  const res = await fetch(`${API_URL}${path}`, { headers, ...options });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Request to ${path} failed with status ${res.status}`);
@@ -73,9 +75,13 @@ export const api = {
   },
   users: {
     list: () => get<AppUser[]>('/api/users'),
-    create: (u: Omit<AppUser, 'id'> & { id?: string }) => post<AppUser>('/api/users', u),
+    create: (u: { name: string; email: string; role: string; department?: string; password: string }) =>
+      post<AppUser>('/api/users', u),
     update: (id: string, u: Partial<AppUser>) => put<AppUser>(`/api/users/${id}`, u),
     remove: (id: string) => del(`/api/users/${id}`),
+  },
+  auth: {
+    me: () => get<AppUser>('/api/auth/me'),
   },
   positions: {
     report: (p: { device_id: string; lat: number; lng: number; speed?: number; heading?: number; timestamp?: string }) =>

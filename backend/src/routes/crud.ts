@@ -1,12 +1,20 @@
 import { Router } from 'express';
 import { supabase } from '../supabaseClient.js';
 import { toCamel, toCamelList, toSnakeRow } from '../transform.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 // Generic REST CRUD router over a single Supabase table. Used for the resources whose
 // frontend shape maps 1:1 onto snake_case columns via camelCase conversion (everything
 // except `vehicles`, which nests lat/lng into `location` and gets its own router).
-export function crudRouter(table: string, options?: { orderBy?: string; ascending?: boolean }) {
+// Reads require any logged-in role; writes require `writeRoles` (defaults to admin+manager).
+export function crudRouter(
+  table: string,
+  options?: { orderBy?: string; ascending?: boolean; writeRoles?: string[] }
+) {
   const router = Router();
+  const writeRoles = options?.writeRoles ?? ['admin', 'manager'];
+
+  router.use(requireAuth);
 
   router.get('/', async (req, res) => {
     let query = supabase.from(table).select('*');
@@ -25,14 +33,14 @@ export function crudRouter(table: string, options?: { orderBy?: string; ascendin
     res.json(toCamel(data));
   });
 
-  router.post('/', async (req, res) => {
+  router.post('/', requireRole(writeRoles), async (req, res) => {
     const row = toSnakeRow(req.body);
     const { data, error } = await supabase.from(table).insert(row).select().single();
     if (error) return res.status(400).json({ error: error.message });
     res.status(201).json(toCamel(data));
   });
 
-  router.put('/:id', async (req, res) => {
+  router.put('/:id', requireRole(writeRoles), async (req, res) => {
     const row = toSnakeRow(req.body);
     const { data, error } = await supabase.from(table).update(row).eq('id', req.params.id).select().maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
@@ -40,7 +48,7 @@ export function crudRouter(table: string, options?: { orderBy?: string; ascendin
     res.json(toCamel(data));
   });
 
-  router.delete('/:id', async (req, res) => {
+  router.delete('/:id', requireRole(writeRoles), async (req, res) => {
     const { error } = await supabase.from(table).delete().eq('id', req.params.id);
     if (error) return res.status(400).json({ error: error.message });
     res.status(204).send();
