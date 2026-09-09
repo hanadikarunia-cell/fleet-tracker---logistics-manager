@@ -1,0 +1,84 @@
+import type {
+  Vehicle, GPSDevice, Geofence, FleetAlert, MaintenanceLog,
+  DriverPerformance, InventoryItem, InventoryMovement, LocationHistoryPoint, AppUser,
+} from './types';
+
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001';
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Request to ${path} failed with status ${res.status}`);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+const get = <T>(path: string) => request<T>(path);
+const post = <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) });
+const put = <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) });
+const del = (path: string) => request<void>(path, { method: 'DELETE' });
+
+export const api = {
+  vehicles: {
+    list: () => get<Vehicle[]>('/api/vehicles'),
+    create: (v: Omit<Vehicle, 'id'> & { id?: string }) => post<Vehicle>('/api/vehicles', v),
+    update: (id: string, v: Partial<Vehicle>) => put<Vehicle>(`/api/vehicles/${id}`, v),
+    remove: (id: string) => del(`/api/vehicles/${id}`),
+    history: (id: string) => get<LocationHistoryPoint[]>(`/api/vehicles/${id}/history`),
+  },
+  devices: {
+    list: () => get<GPSDevice[]>('/api/devices'),
+    create: (d: GPSDevice) => post<GPSDevice>('/api/devices', d),
+    update: (id: string, d: Partial<GPSDevice>) => put<GPSDevice>(`/api/devices/${id}`, d),
+    remove: (id: string) => del(`/api/devices/${id}`),
+  },
+  geofences: {
+    list: () => get<Geofence[]>('/api/geofences'),
+    create: (g: Geofence) => post<Geofence>('/api/geofences', g),
+    update: (id: string, g: Partial<Geofence>) => put<Geofence>(`/api/geofences/${id}`, g),
+    remove: (id: string) => del(`/api/geofences/${id}`),
+  },
+  alerts: {
+    list: () => get<FleetAlert[]>('/api/alerts'),
+    create: (a: Partial<FleetAlert>) => post<FleetAlert>('/api/alerts', a),
+    update: (id: string, a: Partial<FleetAlert>) => put<FleetAlert>(`/api/alerts/${id}`, a),
+    remove: (id: string) => del(`/api/alerts/${id}`),
+  },
+  maintenance: {
+    list: () => get<MaintenanceLog[]>('/api/maintenance'),
+    create: (m: MaintenanceLog) => post<MaintenanceLog>('/api/maintenance', m),
+    update: (id: string, m: Partial<MaintenanceLog>) => put<MaintenanceLog>(`/api/maintenance/${id}`, m),
+    remove: (id: string) => del(`/api/maintenance/${id}`),
+  },
+  driverPerformance: {
+    list: () => get<DriverPerformance[]>('/api/driver-performance'),
+    create: (d: Partial<DriverPerformance>) => post<DriverPerformance>('/api/driver-performance', d),
+    update: (id: string, d: Partial<DriverPerformance>) => put<DriverPerformance>(`/api/driver-performance/${id}`, d),
+    remove: (id: string) => del(`/api/driver-performance/${id}`),
+  },
+  inventory: {
+    list: () => get<InventoryItem[]>('/api/inventory'),
+    create: (i: Omit<InventoryItem, 'id'> & { id?: string }) => post<InventoryItem>('/api/inventory', i),
+    update: (id: string, i: Partial<InventoryItem>) => put<InventoryItem>(`/api/inventory/${id}`, i),
+    remove: (id: string) => del(`/api/inventory/${id}`),
+  },
+  inventoryMovements: {
+    list: () => get<InventoryMovement[]>('/api/inventory-movements'),
+    create: (m: Omit<InventoryMovement, 'id' | 'timestamp'>) => post<InventoryMovement>('/api/inventory-movements', m),
+  },
+  users: {
+    list: () => get<AppUser[]>('/api/users'),
+    create: (u: Omit<AppUser, 'id'> & { id?: string }) => post<AppUser>('/api/users', u),
+    update: (id: string, u: Partial<AppUser>) => put<AppUser>(`/api/users/${id}`, u),
+    remove: (id: string) => del(`/api/users/${id}`),
+  },
+  positions: {
+    report: (p: { device_id: string; lat: number; lng: number; speed?: number; heading?: number; timestamp?: string }) =>
+      post<{ vehicle: Vehicle; alerts: FleetAlert[] }>('/api/positions', p),
+  },
+};
