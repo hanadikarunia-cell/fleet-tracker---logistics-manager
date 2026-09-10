@@ -10,74 +10,41 @@ import {
   Ruler, RotateCcw, Trash2, Plus, Minus, Crosshair
 } from 'lucide-react';
 
-export interface RainCell {
-  id: string;
-  name: string;
-  locationName: string;
-  lat: number;
-  lng: number;
-  radiusMeters: number;
-  precipitationMmHour: number; // e.g. 42.5 mm/h
-  dbzReflectivity: number; // e.g. 48 dBZ
-  severity: 'light' | 'moderate' | 'heavy' | 'torrential';
-  hazardType: string;
-  recommendedSpeedKmh: number;
+// Real current precipitation per vehicle, fetched from Open-Meteo (free, no API key) — see
+// the fetch effect below. Replaces an earlier version of this feature that drew four
+// hardcoded "rain cells" at fixed coordinates regardless of actual weather (reported as
+// inaccurate in feedback — it never reflected real conditions).
+interface VehicleWeather {
+  precipitationMm: number;
+  weatherCode: number;
 }
 
-export const LIVE_RAIN_CELLS: RainCell[] = [
-  {
-    id: 'cell-01',
-    name: 'Cengkareng Heavy Monsoon Front',
-    locationName: 'Soekarno-Hatta Airport Cargo Corridor',
-    lat: -6.1256,
-    lng: 106.6559,
-    radiusMeters: 14000,
-    precipitationMmHour: 42.5,
-    dbzReflectivity: 48,
-    severity: 'heavy',
-    hazardType: 'Severe Standing Water & Aquaplaning Risk',
-    recommendedSpeedKmh: 45,
-  },
-  {
-    id: 'cell-02',
-    name: 'Tangerang-Merak Downpour Cell',
-    locationName: 'Jakarta-Merak Toll Road & Bandara Interchange',
-    lat: -6.1600,
-    lng: 106.5800,
-    radiusMeters: 18000,
-    precipitationMmHour: 55.0,
-    dbzReflectivity: 53,
-    severity: 'torrential',
-    hazardType: 'Torrential Rain, Flash Flood & Reduced Visibility (<150m)',
-    recommendedSpeedKmh: 40,
-  },
-  {
-    id: 'cell-03',
-    name: 'BSD & Serpong Moderate Rain Band',
-    locationName: 'Serpong-BSD Business District & Jalan Raya Serpong',
-    lat: -6.3020,
-    lng: 106.6528,
-    radiusMeters: 12000,
-    precipitationMmHour: 18.2,
-    dbzReflectivity: 35,
-    severity: 'moderate',
-    hazardType: 'Wet Asphalt & Brake Distance Increase (+35%)',
-    recommendedSpeedKmh: 65,
-  },
-  {
-    id: 'cell-04',
-    name: 'Alam Sutera Squall Corridor',
-    locationName: 'Jakarta Outer Ring Road (JORR) & Alam Sutera Interchange',
-    lat: -6.2200,
-    lng: 106.6700,
-    radiusMeters: 22000,
-    precipitationMmHour: 32.0,
-    dbzReflectivity: 44,
-    severity: 'heavy',
-    hazardType: 'Crosswind Gusts & Low Visibility Squall',
-    recommendedSpeedKmh: 55,
-  },
-];
+type WeatherSeverity = 'light' | 'moderate' | 'heavy' | 'torrential';
+
+function severityOf(mm: number): WeatherSeverity {
+  if (mm > 50) return 'torrential';
+  if (mm > 25) return 'heavy';
+  if (mm > 5) return 'moderate';
+  return 'light';
+}
+
+function recommendedSpeedKmh(mm: number): number {
+  if (mm > 50) return 40;
+  if (mm > 25) return 55;
+  if (mm > 5) return 65;
+  return 80;
+}
+
+// WMO weather codes (https://open-meteo.com/en/docs) collapsed to the few buckets relevant
+// to a driving-hazard readout.
+function weatherCodeKey(code: number): 'clear' | 'cloudy' | 'fog' | 'drizzle' | 'rain' | 'thunderstorm' {
+  if (code >= 95) return 'thunderstorm';
+  if (code >= 80 || (code >= 61 && code <= 67)) return 'rain';
+  if (code >= 51 && code <= 57) return 'drizzle';
+  if (code === 45 || code === 48) return 'fog';
+  if (code >= 2) return 'cloudy';
+  return 'clear';
+}
 
 function computeDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3;
@@ -162,10 +129,12 @@ export default function MapView({
   // Real-Time Weather Hazard States. There's no live radar *imagery* here — RainViewer's
   // tile overlay only renders down to about zoom 5-6 (it serves a "Zoom Level Not Supported"
   // placeholder tile beyond that), which is coarser than any zoom this fleet map actually
-  // uses. The hazard circles/markers below are independent of that and work at any zoom.
+  // uses. The hazard markers below are independent of that and work at any zoom — they're
+  // driven by real current precipitation per vehicle location (see the fetch effect below).
   const [showWeatherRadar, setShowWeatherRadar] = useState(settings.showWeather ?? true);
-  const [selectedRainCell, setSelectedRainCell] = useState<RainCell | null>(null);
   const [showWeatherHud, setShowWeatherHud] = useState(true);
+  const [vehicleWeather, setVehicleWeather] = useState<Record<string, VehicleWeather>>({});
+  const [weatherFetchedAt, setWeatherFetchedAt] = useState<Date | null>(null);
 
   // Sync state with settings prop
   useEffect(() => {
@@ -173,6 +142,50 @@ export default function MapView({
       setShowWeatherRadar(settings.showWeather);
     }
   }, [settings.showWeather]);
+
+  // Fetch real current precipitation for every vehicle's actual location from Open-Meteo
+  // (free, no API key, updates every ~15 min) — on mount and every 10 minutes after, rather
+  // than on every vehicle position tick (weather doesn't change that fast, and Realtime
+  // position updates can arrive far more often than that).
+  const vehiclesForWeatherRef = useRef(vehicles);
+  useEffect(() => {
+    vehiclesForWeatherRef.current = vehicles;
+  }, [vehicles]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchWeather = async () => {
+      const list = vehiclesForWeatherRef.current;
+      if (list.length === 0) return;
+      const lats = list.map((v) => v.location.lat).join(',');
+      const lngs = list.map((v) => v.location.lng).join(',');
+      try {
+        const res = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}&current=precipitation,weather_code&timezone=auto`
+        );
+        const data = await res.json();
+        const results: any[] = Array.isArray(data) ? data : [data];
+        if (cancelled) return;
+        const next: Record<string, VehicleWeather> = {};
+        list.forEach((v, i) => {
+          const current = results[i]?.current;
+          if (current) {
+            next[v.id] = { precipitationMm: current.precipitation ?? 0, weatherCode: current.weather_code ?? 0 };
+          }
+        });
+        setVehicleWeather(next);
+        setWeatherFetchedAt(new Date());
+      } catch (err) {
+        console.error('Failed to fetch live weather:', err);
+      }
+    };
+    fetchWeather();
+    const interval = setInterval(fetchWeather, 10 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Map sources dictionary — free, key-free tile providers (no unofficial/ToS-violating endpoints)
   const mapTileUrls = {
@@ -274,7 +287,9 @@ export default function MapView({
     }
   }, [mapType, settings.isOfflineMode, offlineSimulate]);
 
-  // Handle Real-Time Weather Precipitation Radar Overlay & Rain Cell Markers
+  // Render a real-precipitation marker at each vehicle currently reporting rain (from
+  // vehicleWeather, fetched above) — a point reading at the vehicle's own location, not a
+  // drawn storm boundary we have no real data for.
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -285,29 +300,25 @@ export default function MapView({
     }
 
     if (showWeatherRadar && !settings.isOfflineMode && !offlineSimulate) {
-      // Render Precipitation Density Hazard Cells on map
-      LIVE_RAIN_CELLS.forEach((cell) => {
-        let color = '#22c55e'; // light
+      vehicles.forEach((v) => {
+        const w = vehicleWeather[v.id];
+        if (!w || w.precipitationMm < 0.1) return;
+
+        const severity = severityOf(w.precipitationMm);
+        let color = '#22c55e';
         let fillColor = '#16a34a';
         let fillOpacity = 0.22;
-
-        if (cell.severity === 'torrential') {
-          color = '#ef4444';
-          fillColor = '#dc2626';
-          fillOpacity = 0.38;
-        } else if (cell.severity === 'heavy') {
-          color = '#f97316';
-          fillColor = '#ea580c';
-          fillOpacity = 0.32;
-        } else if (cell.severity === 'moderate') {
-          color = '#eab308';
-          fillColor = '#ca8a04';
-          fillOpacity = 0.26;
+        if (severity === 'torrential') {
+          color = '#ef4444'; fillColor = '#dc2626'; fillOpacity = 0.38;
+        } else if (severity === 'heavy') {
+          color = '#f97316'; fillColor = '#ea580c'; fillOpacity = 0.32;
+        } else if (severity === 'moderate') {
+          color = '#eab308'; fillColor = '#ca8a04'; fillOpacity = 0.26;
         }
 
-        // Draw animated rain circle on map
-        const circle = L.circle([cell.lat, cell.lng], {
-          radius: cell.radiusMeters,
+        // Small fixed-radius indicator (a real point reading, not a mapped storm shape)
+        const circle = L.circle([v.location.lat, v.location.lng], {
+          radius: 1500,
           color,
           weight: 2,
           fillColor,
@@ -315,11 +326,10 @@ export default function MapView({
           dashArray: '6, 6',
         });
 
-        // Center pulse marker showing precipitation mm/h
         const rainHtml = `
           <div class="relative flex items-center justify-center pointer-events-auto cursor-pointer">
             <div class="w-9 h-9 rounded-full flex flex-col items-center justify-center shadow-2xl text-white font-extrabold border-2 border-white animate-pulse" style="background-color: ${color}">
-              <span class="text-[10px] leading-none">${cell.precipitationMmHour.toFixed(0)}</span>
+              <span class="text-[10px] leading-none">${w.precipitationMm.toFixed(1)}</span>
               <span class="text-[7px] font-mono leading-none opacity-90">mm/h</span>
             </div>
           </div>
@@ -332,28 +342,24 @@ export default function MapView({
           iconAnchor: [18, 18],
         });
 
-        const marker = L.marker([cell.lat, cell.lng], { icon: customIcon });
+        const marker = L.marker([v.location.lat, v.location.lng], { icon: customIcon });
 
+        const label = t(`weather.${weatherCodeKey(w.weatherCode)}` as any);
         const popupContent = `
           <div class="p-2 space-y-1 text-slate-800">
             <div class="flex items-center gap-1.5 font-extrabold text-xs">
               <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${color}"></span>
-              ${cell.name}
+              ${v.name}
             </div>
-            <p class="text-[11px] font-semibold text-slate-600">${cell.locationName}</p>
             <div class="grid grid-cols-2 gap-1 text-[10px] font-mono bg-slate-100 p-1.5 rounded">
-              <div>Precipitation: <b>${cell.precipitationMmHour} mm/h</b></div>
-              <div>Reflectivity: <b>${cell.dbzReflectivity} dBZ</b></div>
+              <div>${label}: <b>${w.precipitationMm.toFixed(1)} mm/h</b></div>
+              <div>Max safe speed: <b>${recommendedSpeedKmh(w.precipitationMm)} km/h</b></div>
             </div>
-            <p class="text-[10px] font-bold text-rose-600 mt-1">⚠️ Hazard: ${cell.hazardType}</p>
-            <p class="text-[10px] text-slate-500">Max Safe Speed: <b>${cell.recommendedSpeedKmh} km/h</b></p>
           </div>
         `;
 
         marker.bindPopup(popupContent);
         circle.bindPopup(popupContent);
-
-        marker.on('click', () => setSelectedRainCell(cell));
 
         if (weatherCellsGroupRef.current) {
           weatherCellsGroupRef.current.addLayer(circle);
@@ -361,7 +367,7 @@ export default function MapView({
         }
       });
     }
-  }, [showWeatherRadar, settings.isOfflineMode, offlineSimulate, mapType, mapVersion]);
+  }, [showWeatherRadar, settings.isOfflineMode, offlineSimulate, vehicles, vehicleWeather, t]);
 
   // Cursor crosshair when measuring distance
   useEffect(() => {
@@ -1044,6 +1050,7 @@ export default function MapView({
                 </h4>
                 <p className="text-[10px] text-slate-400 font-mono">
                   {t('map.weatherSubtitle')}
+                  {weatherFetchedAt && ` · ${t('map.dataAsOf')} ${weatherFetchedAt.toLocaleTimeString()}`}
                 </p>
               </div>
             </div>
@@ -1094,15 +1101,11 @@ export default function MapView({
                 </div>
               </div>
 
-              {/* Fleet Hazard Cross-Analysis Assessment */}
+              {/* Fleet Hazard Cross-Analysis Assessment — driven by real per-vehicle weather */}
               {(() => {
-                const affectedVehicles = vehicles.map((v) => {
-                  const cell = LIVE_RAIN_CELLS.find((c) => {
-                    const dist = computeDistanceMeters(v.location.lat, v.location.lng, c.lat, c.lng);
-                    return dist <= c.radiusMeters;
-                  });
-                  return { vehicle: v, cell };
-                }).filter((item) => item.cell !== undefined);
+                const affectedVehicles = vehicles
+                  .map((v) => ({ vehicle: v, weather: vehicleWeather[v.id] }))
+                  .filter((item): item is { vehicle: Vehicle; weather: VehicleWeather } => !!item.weather && item.weather.precipitationMm >= 0.1);
 
                 return (
                   <div className="space-y-1.5 pt-1 border-t border-slate-800">
@@ -1122,8 +1125,9 @@ export default function MapView({
                       </p>
                     ) : (
                       <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                        {affectedVehicles.map(({ vehicle, cell }) => {
-                          const isSpeedingInRain = vehicle.speed > (cell?.recommendedSpeedKmh || 50);
+                        {affectedVehicles.map(({ vehicle, weather }) => {
+                          const safeSpeed = recommendedSpeedKmh(weather.precipitationMm);
+                          const isSpeedingInRain = vehicle.speed > safeSpeed;
 
                           return (
                             <div
@@ -1140,11 +1144,11 @@ export default function MapView({
                                   <span className="font-mono text-[9px] text-cyan-300">({vehicle.speed} km/h)</span>
                                 </div>
                                 <p className="text-[9px] text-slate-400 truncate">
-                                  {t('map.zone')} {cell?.name} ({cell?.precipitationMmHour} mm/h)
+                                  {t('map.currentRain')} {t(`weather.${weatherCodeKey(weather.weatherCode)}` as any)} ({weather.precipitationMm.toFixed(1)} mm/h)
                                 </p>
                                 {isSpeedingInRain && (
                                   <span className="inline-block text-[8px] font-black text-rose-400 bg-rose-500/20 px-1.5 py-0.2 rounded border border-rose-500/40 uppercase">
-                                    ⚠️ {t('map.aquaplaningPrefix')} {cell?.recommendedSpeedKmh} {t('map.aquaplaningSuffix')}
+                                    ⚠️ {t('map.aquaplaningPrefix')} {safeSpeed} {t('map.aquaplaningSuffix')}
                                   </span>
                                 )}
                               </div>
