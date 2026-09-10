@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Feedback, FeedbackStatus } from '../types';
 import { MessageSquare, Trash2, ImageIcon, X } from 'lucide-react';
+import { useLanguage } from '../i18n';
 
 interface FeedbackViewProps {
   feedback: Feedback[];
@@ -15,11 +16,19 @@ const STATUS_STYLES: Record<FeedbackStatus, string> = {
 };
 
 export default function FeedbackView({ feedback, onUpdateStatus, onDelete }: FeedbackViewProps) {
+  const { t } = useLanguage();
   const [filter, setFilter] = useState<'all' | FeedbackStatus>('all');
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const visible = filter === 'all' ? feedback : feedback.filter((f) => f.status === filter);
   const newCount = feedback.filter((f) => f.status === 'new').length;
+
+  const filterLabels: Record<'all' | FeedbackStatus, string> = {
+    all: t('feedback.filterAll'),
+    new: t('feedback.filterNew'),
+    reviewed: t('feedback.filterReviewed'),
+    resolved: t('feedback.filterResolved'),
+  };
 
   return (
     <div className="space-y-4">
@@ -30,9 +39,9 @@ export default function FeedbackView({ feedback, onUpdateStatus, onDelete }: Fee
               <MessageSquare className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="font-extrabold text-slate-900 text-sm">User Feedback</h4>
+              <h4 className="font-extrabold text-slate-900 text-sm">{t('feedback.inboxTitle')}</h4>
               <p className="text-[10px] text-slate-400 font-semibold">
-                {newCount > 0 ? `${newCount} new submission${newCount === 1 ? '' : 's'}` : 'All caught up'}
+                {newCount > 0 ? `${newCount} ${t('feedback.newSubmissions')}${newCount === 1 ? '' : 's'}` : t('feedback.allCaughtUp')}
               </p>
             </div>
           </div>
@@ -46,14 +55,14 @@ export default function FeedbackView({ feedback, onUpdateStatus, onDelete }: Fee
                   filter === f ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                {f}
+                {filterLabels[f]}
               </button>
             ))}
           </div>
         </div>
 
         {visible.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-8">No feedback here.</p>
+          <p className="text-xs text-slate-400 text-center py-8">{t('feedback.empty')}</p>
         ) : (
           <div className="space-y-3">
             {visible.map((item) => (

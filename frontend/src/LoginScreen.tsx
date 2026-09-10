@@ -1,8 +1,11 @@
 import { FormEvent, useState } from 'react';
 import { Navigation, AlertTriangle, Loader2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
+import { useLanguage } from './i18n';
+import LanguageToggle from './components/LanguageToggle';
 
 export default function LoginScreen() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +16,7 @@ export default function LoginScreen() {
     setError(null);
 
     if (!supabase) {
-      setError('Supabase is not configured (missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).');
+      setError(t('login.notConfigured'));
       return;
     }
 
@@ -26,14 +29,17 @@ export default function LoginScreen() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 p-5">
       <div className="w-full max-w-sm space-y-6">
-        <div className="flex items-center gap-3 justify-center">
-          <div className="p-2.5 bg-blue-600 rounded-xl">
-            <Navigation className="w-5 h-5 text-white" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-blue-600 rounded-xl">
+              <Navigation className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="font-extrabold text-sm tracking-wider text-white">{t('brand.name')}</h1>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{t('brand.subtitle')}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-extrabold text-sm tracking-wider text-white">FLEET TRACKER</h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Tangerang Logistics</p>
-          </div>
+          <LanguageToggle dark />
         </div>
 
         <form
@@ -41,12 +47,12 @@ export default function LoginScreen() {
           className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4"
         >
           <div>
-            <h2 className="text-white font-bold text-sm">Sign in</h2>
-            <p className="text-slate-400 text-xs mt-0.5">Ask an administrator for access if you don't have an account.</p>
+            <h2 className="text-white font-bold text-sm">{t('login.title')}</h2>
+            <p className="text-slate-400 text-xs mt-0.5">{t('login.subtitle')}</p>
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">Email</label>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">{t('login.email')}</label>
             <input
               type="email"
               required
@@ -59,7 +65,7 @@ export default function LoginScreen() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">Password</label>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide">{t('login.password')}</label>
             <input
               type="password"
               required
@@ -83,7 +89,7 @@ export default function LoginScreen() {
             className="w-full py-3 rounded-xl font-extrabold text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white flex items-center justify-center gap-2 transition"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {loading ? 'Signing in…' : 'Sign In'}
+            {loading ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
       </div>

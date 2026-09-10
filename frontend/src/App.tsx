@@ -16,6 +16,8 @@ import VehicleManagement from './components/VehicleManagement';
 import UserRoleManagement from './components/UserRoleManagement';
 import FeedbackModal from './components/FeedbackModal';
 import FeedbackView from './components/FeedbackView';
+import LanguageToggle from './components/LanguageToggle';
+import { useLanguage } from './i18n';
 import QuickAssetLocateBar from './components/common/QuickAssetLocateBar';
 import VehicleTelemetryHistoryView from './components/telemetry/VehicleTelemetryHistoryView';
 import PredictiveArrivalEstimatorView from './components/analytics/PredictiveArrivalEstimatorView';
@@ -24,7 +26,7 @@ import GeofenceEfficiencyAlertView from './components/geofence/GeofenceEfficienc
 import type { Session } from '@supabase/supabase-js';
 import {
   Map, LayoutDashboard, Boxes, Users, Cpu, Truck,
-  Plus, AlertOctagon, Info, Layers, Smartphone, Sparkles, Navigation, Fingerprint,
+  Plus, AlertOctagon, Info, Layers, Smartphone, Navigation, Fingerprint,
   Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare
 } from 'lucide-react';
 
@@ -35,6 +37,8 @@ export const ROLE_MODULES: Record<UserRole, string[]> = {
 };
 
 export default function App() {
+  const { t } = useLanguage();
+
   // --- 1. LIVE STATE, LOADED FROM THE BACKEND API (see the effect below) ---
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [devices, setDevices] = useState<GPSDevice[]>([]);
@@ -812,15 +816,12 @@ export default function App() {
                 <Navigation className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="font-extrabold text-sm tracking-wider">FLEET TRACKER</h1>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Tangerang Logistics</p>
+                <h1 className="font-extrabold text-sm tracking-wider">{t('brand.name')}</h1>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{t('brand.subtitle')}</p>
               </div>
             </div>
-            
-            {/* Sparkle details */}
-            <div className="p-1 bg-slate-800 rounded-lg text-blue-500 animate-pulse">
-              <Sparkles className="w-4 h-4" />
-            </div>
+
+            <LanguageToggle dark />
           </div>
 
           {/* Signed-in Account Widget */}
@@ -846,7 +847,7 @@ export default function App() {
             <button
               id="btn-sign-out"
               onClick={handleSignOut}
-              title="Sign out"
+              title={t('sidebar.signOut')}
               className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-700 transition shrink-0"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -865,7 +866,7 @@ export default function App() {
                     : 'text-slate-300 hover:bg-slate-800'
                 }`}
               >
-                <Map className="w-4 h-4" /> Live Tracking Map
+                <Map className="w-4 h-4" /> {t('nav.map')}
               </button>
             )}
 
@@ -879,7 +880,7 @@ export default function App() {
                     : 'text-slate-300 hover:bg-slate-800'
                 }`}
               >
-                <LayoutDashboard className="w-4 h-4" /> Operational Dashboard
+                <LayoutDashboard className="w-4 h-4" /> {t('nav.dashboard')}
               </button>
             )}
 
@@ -893,7 +894,7 @@ export default function App() {
                     : 'text-slate-300 hover:bg-slate-800'
                 }`}
               >
-                <Activity className="w-4 h-4 text-indigo-400" /> Vehicle Telemetry History
+                <Activity className="w-4 h-4 text-indigo-400" /> {t('nav.telemetry')}
               </button>
             )}
 
@@ -907,7 +908,7 @@ export default function App() {
                     : 'text-slate-300 hover:bg-slate-800'
                 }`}
               >
-                <Clock className="w-4 h-4 text-teal-400" /> Predictive Arrival (ETA)
+                <Clock className="w-4 h-4 text-teal-400" /> {t('nav.eta')}
               </button>
             )}
 
@@ -921,7 +922,7 @@ export default function App() {
                     : 'text-slate-300 hover:bg-slate-800'
                 }`}
               >
-                <ShieldAlert className="w-4 h-4 text-amber-400" /> Geofence Efficiency Alerts
+                <ShieldAlert className="w-4 h-4 text-amber-400" /> {t('nav.efficiency')}
               </button>
             )}
 
@@ -935,7 +936,7 @@ export default function App() {
                     : 'text-slate-300 hover:bg-slate-800'
                 }`}
               >
-                <Boxes className="w-4 h-4" /> Logistics Inventory
+                <Boxes className="w-4 h-4" /> {t('nav.inventory')}
               </button>
             )}
 
@@ -949,7 +950,7 @@ export default function App() {
                     : 'text-slate-300 hover:bg-slate-800'
                 }`}
               >
-                <Users className="w-4 h-4" /> Driver Performance
+                <Users className="w-4 h-4" /> {t('nav.drivers')}
               </button>
             )}
 
@@ -963,7 +964,7 @@ export default function App() {
                     : 'text-slate-300 hover:bg-slate-800'
                 }`}
               >
-                <Truck className="w-4 h-4" /> Fleet Directory
+                <Truck className="w-4 h-4" /> {t('nav.vehicles')}
               </button>
             )}
 
@@ -977,7 +978,7 @@ export default function App() {
                     : 'text-slate-300 hover:bg-slate-800'
                 }`}
               >
-                <Cpu className="w-4 h-4" /> GPS Hardware Register
+                <Cpu className="w-4 h-4" /> {t('nav.devices')}
               </button>
             )}
 
@@ -991,7 +992,7 @@ export default function App() {
                     : 'text-slate-300 hover:bg-slate-800'
                 }`}
               >
-                <Fingerprint className="w-4 h-4" /> User & Role Center
+                <Fingerprint className="w-4 h-4" /> {t('nav.users')}
               </button>
             )}
 
@@ -1006,7 +1007,7 @@ export default function App() {
                 }`}
               >
                 <span className="flex items-center gap-3">
-                  <MessageSquare className="w-4 h-4" /> User Feedback
+                  <MessageSquare className="w-4 h-4" /> {t('nav.feedback')}
                 </span>
                 {feedback.filter((f) => f.status === 'new').length > 0 && (
                   <span className="bg-rose-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center shrink-0">
@@ -1024,15 +1025,15 @@ export default function App() {
           <FeedbackModal />
           <div className="p-3 bg-slate-800 rounded-xl border border-slate-700/50 space-y-1.5 text-xs">
             <div className="flex justify-between items-center text-slate-400 font-semibold text-[10px] uppercase">
-              <span>Telemetry Ping Rate</span>
+              <span>{t('sidebar.pingRate')}</span>
               <span className="text-emerald-400 font-bold">{mapSettings.updateInterval}s</span>
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-300">
-              <span>Geofences Guard:</span>
-              <span className="font-bold text-white">Active ({geofences.filter(g => g.active).length})</span>
+              <span>{t('sidebar.geofencesGuard')}</span>
+              <span className="font-bold text-white">{t('sidebar.active')} ({geofences.filter(g => g.active).length})</span>
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-300 border-t border-slate-700/50 pt-2 mt-2">
-              <span className="flex items-center gap-1">Alert Audio Synth:</span>
+              <span className="flex items-center gap-1">{t('sidebar.alertAudio')}</span>
               <button
                 id="btn-toggle-sound"
                 onClick={() => {
@@ -1049,11 +1050,11 @@ export default function App() {
               >
                 {soundEnabled ? (
                   <>
-                    <Volume2 className="w-3.5 h-3.5" /> ON
+                    <Volume2 className="w-3.5 h-3.5" /> {t('sidebar.on')}
                   </>
                 ) : (
                   <>
-                    <VolumeX className="w-3.5 h-3.5" /> OFF
+                    <VolumeX className="w-3.5 h-3.5" /> {t('sidebar.off')}
                   </>
                 )}
               </button>
@@ -1069,30 +1070,30 @@ export default function App() {
         <header className="bg-white border-b border-slate-200 p-4 flex flex-col md:flex-row items-center justify-between gap-4 z-20 shadow-sm">
           <div>
             <h2 className="text-lg font-bold text-slate-800 uppercase tracking-wide">
-              {activeTab === 'map' && 'Live GPS Navigation Tracking'}
-              {activeTab === 'dashboard' && 'Operational Fleet Management Scoreboard'}
-              {activeTab === 'telemetry' && 'Vehicle CAN-Bus Telemetry & Route History'}
-              {activeTab === 'eta' && 'AI Predictive Arrival Estimator (ETA Engine)'}
-              {activeTab === 'efficiency' && 'Geofence Dwell Time & Route Efficiency Alerts'}
-              {activeTab === 'inventory' && 'Seamless Logistics Inventory System'}
-              {activeTab === 'drivers' && 'Driver Telematics Scorecard'}
-              {activeTab === 'vehicles' && 'Vehicle Directory'}
-              {activeTab === 'devices' && 'GPS Telemetry Register'}
-              {activeTab === 'users' && 'User Role & Permissions Center'}
-              {activeTab === 'feedback' && 'User Feedback Inbox'}
+              {activeTab === 'map' && t('header.map.title')}
+              {activeTab === 'dashboard' && t('header.dashboard.title')}
+              {activeTab === 'telemetry' && t('header.telemetry.title')}
+              {activeTab === 'eta' && t('header.eta.title')}
+              {activeTab === 'efficiency' && t('header.efficiency.title')}
+              {activeTab === 'inventory' && t('header.inventory.title')}
+              {activeTab === 'drivers' && t('header.drivers.title')}
+              {activeTab === 'vehicles' && t('header.vehicles.title')}
+              {activeTab === 'devices' && t('header.devices.title')}
+              {activeTab === 'users' && t('header.users.title')}
+              {activeTab === 'feedback' && t('header.feedback.title')}
             </h2>
             <p className="text-xs text-slate-500 font-semibold">
-              {activeTab === 'map' && 'Track physical assets en-route across Greater Jakarta (Jabodetabek).'}
-              {activeTab === 'dashboard' && 'Aggregated diagnostic logs, low battery alarms, and geofence cross triggers.'}
-              {activeTab === 'telemetry' && 'Inspect CAN-bus diagnostic logs, speed curves, TPMS pressure history, and telemetry playbacks.'}
-              {activeTab === 'eta' && 'Predict exact arrival times using highway traffic index, weather friction, and driver rest mandates.'}
-              {activeTab === 'efficiency' && 'Audit geofence dwell times, tardy arrivals, curfew breaches, and demurrage cost risks.'}
-              {activeTab === 'inventory' && 'Log cargo manifests and balance payload capacities connected to tracking telemetry.'}
-              {activeTab === 'drivers' && 'Evaluate operator safety quotients, harsh braking limits, and idling times.'}
-              {activeTab === 'vehicles' && 'Add, edit, or retire transport vehicle assets from active dispatch cycles.'}
-              {activeTab === 'devices' && 'Bind hardware IMEI transceivers to track precise geographic telemetry.'}
-              {activeTab === 'users' && 'Manage system operator accounts, operational roles, and security policies.'}
-              {activeTab === 'feedback' && 'Bug reports and suggestions submitted from inside the app, with screenshots.'}
+              {activeTab === 'map' && t('header.map.subtitle')}
+              {activeTab === 'dashboard' && t('header.dashboard.subtitle')}
+              {activeTab === 'telemetry' && t('header.telemetry.subtitle')}
+              {activeTab === 'eta' && t('header.eta.subtitle')}
+              {activeTab === 'efficiency' && t('header.efficiency.subtitle')}
+              {activeTab === 'inventory' && t('header.inventory.subtitle')}
+              {activeTab === 'drivers' && t('header.drivers.subtitle')}
+              {activeTab === 'vehicles' && t('header.vehicles.subtitle')}
+              {activeTab === 'devices' && t('header.devices.subtitle')}
+              {activeTab === 'users' && t('header.users.subtitle')}
+              {activeTab === 'feedback' && t('header.feedback.subtitle')}
             </p>
           </div>
 

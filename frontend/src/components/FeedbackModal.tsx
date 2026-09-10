@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
 import { MessageSquarePlus, ImagePlus, X, Loader2, CheckCircle2 } from 'lucide-react';
 import { api } from '../api';
+import { useLanguage } from '../i18n';
 
 export default function FeedbackModal() {
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [image, setImage] = useState<File | null>(null);
@@ -32,7 +34,7 @@ export default function FeedbackModal() {
 
   const handleSubmit = async () => {
     if (!message.trim()) {
-      setError('Please describe your feedback first.');
+      setError(t('feedback.errorEmpty'));
       return;
     }
     setSubmitting(true);
@@ -55,7 +57,7 @@ export default function FeedbackModal() {
         onClick={() => setIsOpen(true)}
         className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition border border-slate-700 flex items-center justify-center gap-2"
       >
-        <MessageSquarePlus className="w-3.5 h-3.5" /> Send Feedback
+        <MessageSquarePlus className="w-3.5 h-3.5" /> {t('feedback.sendButton')}
       </button>
 
       {isOpen && (
@@ -67,8 +69,8 @@ export default function FeedbackModal() {
                   <MessageSquarePlus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-slate-900">Send Feedback</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Found a bug or have a suggestion? Attach a screenshot if it helps.</p>
+                  <h3 className="font-bold text-sm text-slate-900">{t('feedback.modalTitle')}</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{t('feedback.modalSubtitle')}</p>
                 </div>
               </div>
               <button onClick={close} className="text-slate-400 hover:text-slate-600 shrink-0">
@@ -78,23 +80,23 @@ export default function FeedbackModal() {
 
             {success ? (
               <div className="flex items-center gap-2 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm font-semibold">
-                <CheckCircle2 className="w-5 h-5" /> Thanks — feedback sent.
+                <CheckCircle2 className="w-5 h-5" /> {t('feedback.thanks')}
               </div>
             ) : (
               <div className="space-y-3 text-xs">
                 <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-slate-600">What's going on?</label>
+                  <label className="font-semibold text-slate-600">{t('feedback.messageLabel')}</label>
                   <textarea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     rows={4}
-                    placeholder="Describe the issue or idea..."
+                    placeholder={t('feedback.messagePlaceholder')}
                     className="p-2.5 border border-slate-200 rounded-lg text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-semibold text-slate-600">Screenshot (optional)</label>
+                  <label className="font-semibold text-slate-600">{t('feedback.imageLabel')}</label>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -117,7 +119,7 @@ export default function FeedbackModal() {
                       onClick={() => fileInputRef.current?.click()}
                       className="flex items-center justify-center gap-1.5 py-3 border-2 border-dashed border-slate-200 rounded-lg text-slate-400 hover:border-blue-300 hover:text-blue-500 transition"
                     >
-                      <ImagePlus className="w-4 h-4" /> Attach image
+                      <ImagePlus className="w-4 h-4" /> {t('feedback.attachImage')}
                     </button>
                   )}
                 </div>
@@ -129,7 +131,7 @@ export default function FeedbackModal() {
                     onClick={close}
                     className="px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-50 transition"
                   >
-                    Cancel
+                    {t('feedback.cancel')}
                   </button>
                   <button
                     id="btn-submit-feedback"
@@ -138,7 +140,7 @@ export default function FeedbackModal() {
                     className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-lg transition flex items-center gap-1.5"
                   >
                     {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    {submitting ? 'Sending…' : 'Send'}
+                    {submitting ? t('feedback.sending') : t('feedback.send')}
                   </button>
                 </div>
               </div>

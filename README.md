@@ -142,6 +142,19 @@ many are still `new`); images are stored in a public Supabase Storage bucket
 (`feedback-images`) that only the backend, using the service-role key, ever
 writes to.
 
+## Language
+
+An EN/ID toggle (top-left of the login screen and the sidebar) switches the
+app's persistent chrome — navigation labels, per-tab header titles, the
+sidebar utility panel, and the feedback flow — between English and Bahasa
+Indonesia, via `frontend/src/i18n.tsx`. The choice is saved to
+`localStorage` and persists across reloads. This does **not** cover the deep
+content inside each tab (dashboard analytics, inventory tables, vehicle/
+device forms, etc.) — translating all of that across 60+ components is a
+separate, much larger effort. To extend coverage, add keys to the
+`translations` object in `i18n.tsx` and call `t('your.key')` from a
+component wrapped by `LanguageProvider`.
+
 ## Notes
 
 - `SUPABASE_SECRET_KEY` (service role) must only ever live in the backend's
