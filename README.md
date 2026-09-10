@@ -144,16 +144,20 @@ writes to.
 
 ## Language
 
-An EN/ID toggle (top-left of the login screen and the sidebar) switches the
-app's persistent chrome — navigation labels, per-tab header titles, the
-sidebar utility panel, and the feedback flow — between English and Bahasa
-Indonesia, via `frontend/src/i18n.tsx`. The choice is saved to
-`localStorage` and persists across reloads. This does **not** cover the deep
-content inside each tab (dashboard analytics, inventory tables, vehicle/
-device forms, etc.) — translating all of that across 60+ components is a
-separate, much larger effort. To extend coverage, add keys to the
-`translations` object in `i18n.tsx` and call `t('your.key')` from a
-component wrapped by `LanguageProvider`.
+An EN/ID toggle (top-left of the login screen and the sidebar) switches
+between English and Bahasa Indonesia, via `frontend/src/i18n.tsx`. The
+choice is saved to `localStorage` and persists across reloads. Covered: the
+app's persistent chrome (navigation labels, per-tab header titles, the
+sidebar utility panel, the feedback flow) and the full Map view — its HUD
+panels (weather/precipitation hazard layer, measure-distance tool), map
+layer/zoom menus, region presets, and the map state/geofence export dialogs.
+Vehicle marker popups on the map (click a vehicle/geofence circle) stay
+English for now. This does **not** cover the deep content inside the other
+tabs (dashboard analytics, inventory tables, vehicle/device forms, etc.) —
+translating all of that across 60+ components is a separate, much larger
+effort. To extend coverage, add keys to the `translations` object in
+`i18n.tsx` and call `t('your.key')` from a component wrapped by
+`LanguageProvider`.
 
 ## Notes
 

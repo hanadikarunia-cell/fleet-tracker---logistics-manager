@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Vehicle, Geofence, LocationHistoryPoint, MapSettings } from '../types';
+import { useLanguage } from '../i18n';
 import {
   Globe, ShieldAlert, Layers, Navigation, ZoomIn, ZoomOut, Info, Eye, EyeOff,
   Wifi, WifiOff, RefreshCw, Grid, Download, FileText, Maximize2,
@@ -129,6 +130,7 @@ export default function MapView({
   onDrawGeofenceComplete,
   onUpdateSettings,
 }: MapViewProps) {
+  const { t } = useLanguage();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   
@@ -998,13 +1000,13 @@ export default function MapView({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="font-bold text-sm tracking-wide">TANGERANG LOGISTICS DESK</h2>
+              <h2 className="font-bold text-sm tracking-wide">{t('map.deskTitle')}</h2>
               <span className="bg-emerald-500/20 text-emerald-400 text-[9px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-1">
-                <Wifi className="w-2.5 h-2.5" /> LIVE FEED
+                <Wifi className="w-2.5 h-2.5" /> {t('map.liveFeed')}
               </span>
             </div>
             <p className="text-[10px] text-slate-400 font-mono">
-              Central Coord: {selectedVehicle ? `${selectedVehicle.location.lat.toFixed(4)}, ${selectedVehicle.location.lng.toFixed(4)}` : 'Tangerang'}
+              {t('map.centralCoord')} {selectedVehicle ? `${selectedVehicle.location.lat.toFixed(4)}, ${selectedVehicle.location.lng.toFixed(4)}` : 'Tangerang'}
             </p>
           </div>
         </div>
@@ -1013,7 +1015,7 @@ export default function MapView({
         {isDrawingGeofence && (
           <div className="bg-rose-500 text-white px-3 py-2 rounded-xl shadow-lg flex items-center gap-2 text-xs font-semibold backdrop-blur pointer-events-auto border border-rose-400 animate-bounce">
             <ShieldAlert className="w-4 h-4" />
-            <span>Click anywhere on the map to define geofence center</span>
+            <span>{t('map.drawingAlert')}</span>
           </div>
         )}
 
@@ -1021,7 +1023,7 @@ export default function MapView({
         {(settings.isOfflineMode || offlineSimulate) && (
           <div className="bg-amber-600/90 text-white px-3 py-2 rounded-xl shadow-lg flex items-center gap-2 text-xs font-semibold backdrop-blur pointer-events-auto border border-amber-500">
             <WifiOff className="w-4 h-4" />
-            <span>Offline Map Active (Simulated Caching - OSM Fallback)</span>
+            <span>{t('map.offlineActive')}</span>
           </div>
         )}
       </div>
@@ -1037,11 +1039,11 @@ export default function MapView({
               </div>
               <div>
                 <h4 className="font-extrabold text-xs text-cyan-300 tracking-wide uppercase flex items-center gap-1.5">
-                  Precipitation Radar & Hazard Layer
+                  {t('map.weatherTitle')}
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
                 </h4>
                 <p className="text-[10px] text-slate-400 font-mono">
-                  Greater Jakarta (Jabodetabek) Precipitation Hazard Monitor
+                  {t('map.weatherSubtitle')}
                 </p>
               </div>
             </div>
@@ -1050,7 +1052,7 @@ export default function MapView({
               <button
                 type="button"
                 onClick={() => setShowWeatherHud(!showWeatherHud)}
-                title={showWeatherHud ? 'Minimize' : 'Expand'}
+                title={showWeatherHud ? t('map.minimize') : t('map.expand')}
                 className="text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 transition cursor-pointer"
               >
                 {showWeatherHud ? <Minus className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
@@ -1061,7 +1063,7 @@ export default function MapView({
                   setShowWeatherRadar(false);
                   if (onUpdateSettings) onUpdateSettings({ showWeather: false });
                 }}
-                title="Close"
+                title={t('map.close')}
                 className="text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
@@ -1074,20 +1076,20 @@ export default function MapView({
               {/* Precipitation Intensity Spectrum Legend */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-[10px] font-extrabold text-slate-300">
-                  <span>Precipitation Spectrum</span>
+                  <span>{t('map.precipSpectrum')}</span>
                 </div>
                 <div className="grid grid-cols-4 gap-1 text-[9px] font-bold text-center">
                   <div className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 py-1 rounded-lg">
-                    🟢 Light (&lt;5mm/h)
+                    🟢 {t('map.light')}
                   </div>
                   <div className="bg-amber-500/20 text-amber-300 border border-amber-500/40 py-1 rounded-lg">
-                    🟡 Moderate (5-25)
+                    🟡 {t('map.moderate')}
                   </div>
                   <div className="bg-orange-500/20 text-orange-300 border border-orange-500/40 py-1 rounded-lg">
-                    🟠 Heavy (25-50)
+                    🟠 {t('map.heavy')}
                   </div>
                   <div className="bg-rose-500/20 text-rose-300 border border-rose-500/40 py-1 rounded-lg">
-                    🔴 Torrential (&gt;50)
+                    🔴 {t('map.torrential')}
                   </div>
                 </div>
               </div>
@@ -1107,16 +1109,16 @@ export default function MapView({
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1">
                         <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                        Fleet Route Hazards ({affectedVehicles.length})
+                        {t('map.fleetRouteHazards')} ({affectedVehicles.length})
                       </span>
                       <span className="text-slate-400 font-mono">
-                        {affectedVehicles.length > 0 ? `${affectedVehicles.length} Vehicles Under Rain` : 'All Routes Clear'}
+                        {affectedVehicles.length > 0 ? `${affectedVehicles.length} ${t('map.vehiclesUnderRain')}` : t('map.allRoutesClear')}
                       </span>
                     </div>
 
                     {affectedVehicles.length === 0 ? (
                       <p className="text-[10px] text-emerald-400 font-medium bg-emerald-950/40 p-2 rounded-xl border border-emerald-900/50">
-                        ✓ No active fleet assets detected inside heavy precipitation cells.
+                        ✓ {t('map.noHazards')}
                       </p>
                     ) : (
                       <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
@@ -1138,11 +1140,11 @@ export default function MapView({
                                   <span className="font-mono text-[9px] text-cyan-300">({vehicle.speed} km/h)</span>
                                 </div>
                                 <p className="text-[9px] text-slate-400 truncate">
-                                  Zone: {cell?.name} ({cell?.precipitationMmHour} mm/h)
+                                  {t('map.zone')} {cell?.name} ({cell?.precipitationMmHour} mm/h)
                                 </p>
                                 {isSpeedingInRain && (
                                   <span className="inline-block text-[8px] font-black text-rose-400 bg-rose-500/20 px-1.5 py-0.2 rounded border border-rose-500/40 uppercase">
-                                    ⚠️ Aquaplaning Hazard: Exceeds {cell?.recommendedSpeedKmh} km/h limit
+                                    ⚠️ {t('map.aquaplaningPrefix')} {cell?.recommendedSpeedKmh} {t('map.aquaplaningSuffix')}
                                   </span>
                                 )}
                               </div>
@@ -1152,7 +1154,7 @@ export default function MapView({
                                 onClick={() => onVehicleClick(vehicle)}
                                 className="px-2 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold rounded-lg text-[9px] shrink-0 cursor-pointer shadow-sm"
                               >
-                                Focus
+                                {t('map.focus')}
                               </button>
                             </div>
                           );
@@ -1178,9 +1180,9 @@ export default function MapView({
               </div>
               <div>
                 <h4 className="font-extrabold text-xs text-violet-300 uppercase tracking-wider">
-                  Measure Distance Tool
+                  {t('map.measureTool')}
                 </h4>
-                <p className="text-[10px] text-slate-400">Click points on map to measure linear path length</p>
+                <p className="text-[10px] text-slate-400">{t('map.measureHint')}</p>
               </div>
             </div>
             <button
@@ -1200,7 +1202,7 @@ export default function MapView({
             const totals = getMeasureTotals();
             return (
               <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
-                <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Path Distance</div>
+                <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">{t('map.totalDistance')}</div>
                 <div className="flex items-baseline justify-between">
                   <span className="text-2xl font-black text-violet-400 font-mono">
                     {totals.km.toFixed(2)} <span className="text-xs font-bold text-slate-300">km</span>
@@ -1219,7 +1221,7 @@ export default function MapView({
           {measurePoints.length > 0 && (
             <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
               <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                Waypoints ({measurePoints.length})
+                {t('map.waypoints')} ({measurePoints.length})
               </div>
               {measurePoints.map((pt, idx) => {
                 let seg = 0;
@@ -1233,9 +1235,9 @@ export default function MapView({
                 }
                 return (
                   <div key={idx} className="flex items-center justify-between text-[10px] bg-slate-950/60 px-2 py-1 rounded-lg border border-slate-800/60 font-mono">
-                    <span className="text-slate-300 font-bold">Point {idx + 1}</span>
+                    <span className="text-slate-300 font-bold">{t('map.point')} {idx + 1}</span>
                     <span className="text-slate-400">
-                      {idx === 0 ? 'Start' : `+${seg.toFixed(2)} km`}
+                      {idx === 0 ? t('map.start') : `+${seg.toFixed(2)} km`}
                     </span>
                   </div>
                 );
@@ -1251,7 +1253,7 @@ export default function MapView({
               disabled={measurePoints.length === 0}
               className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 text-[11px] font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1"
             >
-              <RotateCcw className="w-3.5 h-3.5" /> Undo
+              <RotateCcw className="w-3.5 h-3.5" /> {t('map.undo')}
             </button>
             <button
               type="button"
@@ -1259,7 +1261,7 @@ export default function MapView({
               disabled={measurePoints.length === 0}
               className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 text-[11px] font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1"
             >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" /> Clear
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" /> {t('map.clear')}
             </button>
             <button
               type="button"
@@ -1268,7 +1270,7 @@ export default function MapView({
                 isMeasuringDistance ? 'bg-violet-600 text-white shadow-md' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
-              {isMeasuringDistance ? 'Measuring Active' : 'Add Points'}
+              {isMeasuringDistance ? t('map.measuringActive') : t('map.addPoints')}
             </button>
           </div>
         </div>
@@ -1283,7 +1285,7 @@ export default function MapView({
             type="button"
             onClick={() => mapRef.current?.zoomIn()}
             className="p-2.5 hover:bg-slate-100 text-slate-800 transition cursor-pointer border-b border-slate-100 flex items-center justify-center"
-            title="Zoom In"
+            title={t('map.zoomIn')}
           >
             <Plus className="w-5 h-5" />
           </button>
@@ -1292,7 +1294,7 @@ export default function MapView({
             type="button"
             onClick={() => mapRef.current?.zoomOut()}
             className="p-2.5 hover:bg-slate-100 text-slate-800 transition cursor-pointer flex items-center justify-center"
-            title="Zoom Out"
+            title={t('map.zoomOut')}
           >
             <Minus className="w-5 h-5" />
           </button>
@@ -1310,7 +1312,7 @@ export default function MapView({
               ? 'bg-violet-600 text-white border-violet-700 shadow-md ring-2 ring-violet-300 animate-pulse'
               : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-100'
           }`}
-          title={isMeasuringDistance ? "Measuring Active - Click map to add points" : "Measure Distance Tool"}
+          title={isMeasuringDistance ? t('map.measureActiveTooltip') : t('map.measureTool')}
         >
           <Ruler className="w-5 h-5" />
         </button>
@@ -1321,14 +1323,14 @@ export default function MapView({
             id="btn-map-layers"
             onClick={() => { setShowLayerMenu(!showLayerMenu); setShowZoomMenu(false); }}
             className="p-2.5 bg-white hover:bg-slate-50 text-slate-800 rounded-xl shadow-lg hover:shadow-xl transition flex items-center justify-center border border-slate-100 cursor-pointer"
-            title="Map Layers"
+            title={t('map.mapLayers')}
           >
             <Layers className="w-5 h-5" />
           </button>
-          
+
           {showLayerMenu && (
             <div className="absolute right-0 mt-2 bg-white rounded-xl shadow-2xl p-2 border border-slate-100 w-44 flex flex-col gap-1 z-30">
-              <p className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">Map Layers</p>
+              <p className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">{t('map.mapLayers')}</p>
               <button
                 id="layer-street"
                 onClick={() => { setMapType('street'); setShowLayerMenu(false); }}
@@ -1336,7 +1338,7 @@ export default function MapView({
                   mapType === 'street' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                Street Map
+                {t('map.streetMap')}
               </button>
               <button
                 id="layer-satellite"
@@ -1345,7 +1347,7 @@ export default function MapView({
                   mapType === 'satellite' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                Satellite
+                {t('map.satellite')}
               </button>
             </div>
           )}
@@ -1358,65 +1360,65 @@ export default function MapView({
             onClick={() => handleZoomToFit('all')}
             onContextMenu={(e) => { e.preventDefault(); setShowZoomMenu(!showZoomMenu); }}
             className="p-2.5 bg-white hover:bg-slate-50 text-indigo-700 rounded-xl shadow-lg hover:shadow-xl transition flex items-center justify-center border border-slate-100 cursor-pointer"
-            title="Zoom To Fit All Assets & Geofences (Right click or click for menu)"
+            title={t('map.zoomFitTooltip')}
           >
             <Maximize2 className="w-5 h-5" />
           </button>
 
           {showZoomMenu && (
             <div className="absolute right-0 mt-2 bg-white rounded-xl shadow-2xl p-2 border border-slate-100 w-52 flex flex-col gap-1 z-30">
-              <p className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">Zoom To Fit Options</p>
+              <p className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">{t('map.zoomFitOptions')}</p>
               <button
                 onClick={() => handleZoomToFit('all')}
                 className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-indigo-50 text-slate-800 font-semibold transition cursor-pointer flex items-center gap-1.5"
               >
-                <Maximize2 className="w-3.5 h-3.5 text-indigo-600" /> Fit All Assets &amp; Geofences
+                <Maximize2 className="w-3.5 h-3.5 text-indigo-600" /> {t('map.fitAll')}
               </button>
               <button
                 onClick={() => handleZoomToFit('vehicles')}
                 className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-indigo-50 text-slate-800 font-semibold transition cursor-pointer flex items-center gap-1.5"
               >
-                <Navigation className="w-3.5 h-3.5 text-rose-500" /> Fit Fleet Vehicles Only
+                <Navigation className="w-3.5 h-3.5 text-rose-500" /> {t('map.fitVehicles')}
               </button>
               <button
                 onClick={() => handleZoomToFit('geofences')}
                 className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-indigo-50 text-slate-800 font-semibold transition cursor-pointer flex items-center gap-1.5"
               >
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> Fit Geofence Zones
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> {t('map.fitGeofences')}
               </button>
               {selectedVehicle && (
                 <button
                   onClick={() => handleZoomToFit('selected')}
                   className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-indigo-50 text-slate-800 font-semibold transition cursor-pointer flex items-center gap-1.5"
                 >
-                  <MapPin className="w-3.5 h-3.5 text-emerald-500" /> Focus Selected Vehicle
+                  <MapPin className="w-3.5 h-3.5 text-emerald-500" /> {t('map.focusSelected')}
                 </button>
               )}
 
-              <p className="text-[10px] font-bold text-slate-400 px-2 py-1 mt-1 border-t border-slate-100 uppercase tracking-wider">Quick Region Presets</p>
+              <p className="text-[10px] font-bold text-slate-400 px-2 py-1 mt-1 border-t border-slate-100 uppercase tracking-wider">{t('map.quickPresets')}</p>
               <button
                 onClick={() => handleQuickZoomPreset('tangerang')}
                 className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-slate-100 text-slate-700 font-medium transition cursor-pointer"
               >
-                📍 Tangerang City Center
+                📍 {t('map.presetTangerang')}
               </button>
               <button
                 onClick={() => handleQuickZoomPreset('airport')}
                 className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-slate-100 text-slate-700 font-medium transition cursor-pointer"
               >
-                ✈️ Soekarno-Hatta Airport
+                ✈️ {t('map.presetAirport')}
               </button>
               <button
                 onClick={() => handleQuickZoomPreset('bsd')}
                 className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-slate-100 text-slate-700 font-medium transition cursor-pointer"
               >
-                🏙️ BSD City &amp; Serpong
+                🏙️ {t('map.presetBsd')}
               </button>
               <button
                 onClick={() => handleQuickZoomPreset('jabodetabek')}
                 className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-slate-100 text-slate-700 font-medium transition cursor-pointer"
               >
-                🇮🇩 Jabodetabek Overview
+                🇮🇩 {t('map.presetJabodetabek')}
               </button>
             </div>
           )}
@@ -1435,7 +1437,7 @@ export default function MapView({
               ? 'bg-cyan-600 text-white border-cyan-700 shadow-md ring-2 ring-cyan-300 animate-pulse' 
               : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-100'
           }`}
-          title={showWeatherRadar ? "Hide Real-Time Weather Radar & Precipitation Density" : "Show Real-Time Weather Radar & Precipitation Density"}
+          title={showWeatherRadar ? t('map.hideWeather') : t('map.showWeather')}
         >
           <CloudRain className="w-5 h-5" />
         </button>
@@ -1445,7 +1447,7 @@ export default function MapView({
           id="btn-export-map-state"
           onClick={() => setShowExportStateModal(true)}
           className="p-2.5 bg-white hover:bg-slate-50 text-slate-800 rounded-xl shadow-lg hover:shadow-xl transition flex items-center justify-center border border-slate-100 cursor-pointer"
-          title="Export Map State Parameters"
+          title={t('map.exportStateTooltip')}
         >
           <FileText className="w-5 h-5 text-indigo-600" />
         </button>
@@ -1455,7 +1457,7 @@ export default function MapView({
           id="btn-export-geofences"
           onClick={() => setShowGeofenceExportModal(true)}
           className="p-2.5 bg-white hover:bg-slate-50 text-slate-800 rounded-xl shadow-lg hover:shadow-xl transition flex items-center justify-center border border-slate-100 cursor-pointer"
-          title="Export Geofences (GeoJSON / CSV)"
+          title={t('map.exportGeofencesTooltip')}
         >
           <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
         </button>
@@ -1465,11 +1467,11 @@ export default function MapView({
           id="btn-toggle-clustering"
           onClick={() => setEnableClustering(!enableClustering)}
           className={`p-2.5 rounded-xl shadow-lg hover:shadow-xl transition flex items-center justify-center border cursor-pointer ${
-            enableClustering 
-              ? 'bg-indigo-600 text-white border-indigo-700 font-bold' 
+            enableClustering
+              ? 'bg-indigo-600 text-white border-indigo-700 font-bold'
               : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-100'
           }`}
-          title={enableClustering ? "Disable Marker Clustering" : "Enable Marker Clustering"}
+          title={enableClustering ? t('map.disableClustering') : t('map.enableClustering')}
         >
           <Grid className="w-5 h-5" />
         </button>
@@ -1479,11 +1481,11 @@ export default function MapView({
           id="btn-toggle-offline"
           onClick={() => setOfflineSimulate(!offlineSimulate)}
           className={`p-2.5 rounded-xl shadow-lg hover:shadow-xl transition flex items-center justify-center border cursor-pointer ${
-            offlineSimulate 
-              ? 'bg-amber-500 text-white border-amber-600' 
+            offlineSimulate
+              ? 'bg-amber-500 text-white border-amber-600'
               : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-100'
           }`}
-          title={offlineSimulate ? "Simulate Online Map" : "Simulate Offline Map"}
+          title={offlineSimulate ? t('map.simulateOnline') : t('map.simulateOffline')}
         >
           {offlineSimulate ? <WifiOff className="w-5 h-5" /> : <Wifi className="w-5 h-5" />}
         </button>
@@ -1494,11 +1496,11 @@ export default function MapView({
             id="btn-map-toggle-auto-updates"
             onClick={() => onUpdateSettings({ autoPositionUpdates: !settings.autoPositionUpdates })}
             className={`p-2.5 rounded-xl shadow-lg hover:shadow-xl transition flex items-center justify-center border cursor-pointer ${
-              settings.autoPositionUpdates 
-                ? 'bg-emerald-500 text-white border-emerald-600' 
+              settings.autoPositionUpdates
+                ? 'bg-emerald-500 text-white border-emerald-600'
                 : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-100'
             }`}
-            title={settings.autoPositionUpdates ? "Disable Automatic Position Updates" : "Enable Automatic Position Updates"}
+            title={settings.autoPositionUpdates ? t('map.disableAutoUpdates') : t('map.enableAutoUpdates')}
           >
             <RefreshCw className={`w-5 h-5 ${settings.autoPositionUpdates ? 'animate-spin' : ''}`} style={{ animationDuration: '6s' }} />
           </button>
@@ -1515,8 +1517,8 @@ export default function MapView({
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-slate-900">Map Viewport & System State Export</h3>
-                  <p className="text-[11px] text-slate-500">Capture current zoom, bounds, layer config, and telemetry coordinates</p>
+                  <h3 className="font-extrabold text-sm text-slate-900">{t('map.exportStateTitle')}</h3>
+                  <p className="text-[11px] text-slate-500">{t('map.exportStateDesc')}</p>
                 </div>
               </div>
               <button
@@ -1539,7 +1541,7 @@ export default function MapView({
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
               >
                 {copiedState ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                {copiedState ? 'Copied to Clipboard!' : 'Copy JSON'}
+                {copiedState ? t('map.copiedClipboard') : t('map.copyJson')}
               </button>
 
               <button
@@ -1547,7 +1549,7 @@ export default function MapView({
                 onClick={handleExportMapStateJson}
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md"
               >
-                <Download className="w-4 h-4" /> Download State JSON
+                <Download className="w-4 h-4" /> {t('map.downloadStateJson')}
               </button>
             </div>
           </div>
@@ -1564,8 +1566,8 @@ export default function MapView({
                   <FileSpreadsheet className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-slate-900">Geofence Data Export Studio</h3>
-                  <p className="text-[11px] text-slate-500">Export active geofences in standard GeoJSON (GIS) or CSV spreadsheet formats</p>
+                  <h3 className="font-extrabold text-sm text-slate-900">{t('map.geofenceExportTitle')}</h3>
+                  <p className="text-[11px] text-slate-500">{t('map.geofenceExportDesc')}</p>
                 </div>
               </div>
               <button
@@ -1578,7 +1580,7 @@ export default function MapView({
             </div>
 
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
-              <span className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Configured Geofences ({geofences.length})</span>
+              <span className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">{t('map.configuredGeofences')} ({geofences.length})</span>
               <div className="divide-y divide-slate-200/60 max-h-48 overflow-y-auto pr-1">
                 {geofences.map(g => (
                   <div key={g.id} className="py-2 flex items-center justify-between text-xs">
@@ -1589,7 +1591,7 @@ export default function MapView({
                       </span>
                     </div>
                     <span className={`px-2 py-0.5 text-[9px] font-extrabold rounded-full ${g.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
-                      {g.active ? 'Active Zone' : 'Inactive'}
+                      {g.active ? t('map.activeZone') : t('map.inactive')}
                     </span>
                   </div>
                 ))}
@@ -1603,7 +1605,7 @@ export default function MapView({
                 className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 {copiedGeofence ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                {copiedGeofence ? 'Copied!' : 'Copy GeoJSON'}
+                {copiedGeofence ? t('map.copied') : t('map.copyGeoJson')}
               </button>
 
               <button
@@ -1611,7 +1613,7 @@ export default function MapView({
                 onClick={handleExportGeofencesCsv}
                 className="px-3 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
               >
-                <FileSpreadsheet className="w-4 h-4" /> Download CSV
+                <FileSpreadsheet className="w-4 h-4" /> {t('map.downloadCsv')}
               </button>
 
               <button
@@ -1619,7 +1621,7 @@ export default function MapView({
                 onClick={handleExportGeofencesGeoJson}
                 className="px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
               >
-                <Download className="w-4 h-4" /> Download GeoJSON
+                <Download className="w-4 h-4" /> {t('map.downloadGeoJson')}
               </button>
             </div>
           </div>
