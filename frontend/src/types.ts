@@ -161,7 +161,6 @@ export interface MapSettings {
   batteryOptimization: 'saver' | 'balanced' | 'performance';
   updateInterval: number; // seconds
   showGeofences: boolean;
-  showTraffic: boolean;
   showWeather?: boolean;
   autoPositionUpdates: boolean;
 }

@@ -52,7 +52,6 @@ export default function App() {
       batteryOptimization: parsed.batteryOptimization ?? 'balanced',
       updateInterval: parsed.updateInterval ?? 10,
       showGeofences: parsed.showGeofences ?? true,
-      showTraffic: parsed.showTraffic ?? false,
       showWeather: parsed.showWeather ?? true,
       autoPositionUpdates: parsed.autoPositionUpdates ?? true,
     };

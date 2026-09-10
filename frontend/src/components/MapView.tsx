@@ -3,9 +3,9 @@ import L from 'leaflet';
 import { Vehicle, Geofence, LocationHistoryPoint, MapSettings } from '../types';
 import {
   Globe, ShieldAlert, Layers, Navigation, ZoomIn, ZoomOut, Info, Eye, EyeOff,
-  Wifi, WifiOff, RefreshCw, Grid, Gauge, Download, FileText, Maximize2,
+  Wifi, WifiOff, RefreshCw, Grid, Download, FileText, Maximize2,
   Share2, Check, Copy, MapPin, X, FileSpreadsheet, Code, ShieldCheck, Compass, Sparkles,
-  CloudRain, CloudLightning, Wind, Play, Pause, AlertTriangle, Radio, Zap,
+  CloudRain, CloudLightning, Wind, AlertTriangle, Radio, Zap,
   Ruler, RotateCcw, Trash2, Plus, Minus, Crosshair
 } from 'lucide-react';
 
@@ -137,8 +137,6 @@ export default function MapView({
   const geofencesGroupRef = useRef<L.LayerGroup | null>(null);
   const historyGroupRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
-  const trafficLayerRef = useRef<L.TileLayer | null>(null);
-  const weatherLayerRef = useRef<L.TileLayer | null>(null);
   const weatherCellsGroupRef = useRef<L.LayerGroup | null>(null);
   const measureGroupRef = useRef<L.LayerGroup | null>(null);
 
@@ -159,40 +157,13 @@ export default function MapView({
   const isMeasuringDistanceRef = useRef(isMeasuringDistance);
   isMeasuringDistanceRef.current = isMeasuringDistance;
 
-  // Real-Time Weather Radar & Traffic States
+  // Real-Time Weather Hazard States. There's no live radar *imagery* here — RainViewer's
+  // tile overlay only renders down to about zoom 5-6 (it serves a "Zoom Level Not Supported"
+  // placeholder tile beyond that), which is coarser than any zoom this fleet map actually
+  // uses. The hazard circles/markers below are independent of that and work at any zoom.
   const [showWeatherRadar, setShowWeatherRadar] = useState(settings.showWeather ?? true);
-  const [radarFrameIndex, setRadarFrameIndex] = useState(3); // 3 = LIVE NOW
-  const [isPlayingRadar, setIsPlayingRadar] = useState(false);
   const [selectedRainCell, setSelectedRainCell] = useState<RainCell | null>(null);
   const [showWeatherHud, setShowWeatherHud] = useState(true);
-  const [showTrafficLegend, setShowTrafficLegend] = useState(true);
-
-  // RainViewer's real public API — tile paths are timestamp-based and must be fetched from
-  // this manifest first; there's no fixed "nowcast" tile URL.
-  const [radarHost, setRadarHost] = useState<string | null>(null);
-  const [radarPastPaths, setRadarPastPaths] = useState<string[]>([]);
-  const [radarNowcastPaths, setRadarNowcastPaths] = useState<string[]>([]);
-
-  useEffect(() => {
-    fetch('https://api.rainviewer.com/public/weather-maps.json')
-      .then((res) => res.json())
-      .then((data) => {
-        setRadarHost(data.host);
-        setRadarPastPaths((data.radar?.past ?? []).map((f: { path: string }) => f.path));
-        setRadarNowcastPaths((data.radar?.nowcast ?? []).map((f: { path: string }) => f.path));
-      })
-      .catch((err) => console.error('Failed to load RainViewer radar manifest:', err));
-  }, []);
-
-  // Map the 5 HUD frame buttons (-45m, -30m, -15m, LIVE NOW, +15m FCST) onto real frames.
-  const activeRadarPath = (() => {
-    const past = radarPastPaths;
-    if (radarFrameIndex === 4) return radarNowcastPaths[0] ?? past[past.length - 1];
-    if (radarFrameIndex === 3) return past[past.length - 1];
-    // -15m/-30m/-45m: step back from the most recent past frame (frames are ~10min apart).
-    const stepsBack = 3 - radarFrameIndex;
-    return past[Math.max(0, past.length - 1 - stepsBack)];
-  })();
 
   // Sync state with settings prop
   useEffect(() => {
@@ -301,35 +272,9 @@ export default function MapView({
     }
   }, [mapType, settings.isOfflineMode, offlineSimulate]);
 
-  // Handle live traffic overlay updates
-  useEffect(() => {
-    if (!mapRef.current) return;
-
-    if (trafficLayerRef.current) {
-      trafficLayerRef.current.remove();
-      trafficLayerRef.current = null;
-    }
-
-    if (settings.showTraffic && !settings.isOfflineMode && !offlineSimulate) {
-      // Overlay the live traffic layer using Google Traffic layer format
-      const trafficUrl = 'https://mt1.google.com/vt?lyrs=h@159000000,traffic|y&x={x}&y={y}&z={z}';
-      const trafficLayer = L.tileLayer(trafficUrl, {
-        maxZoom: 20,
-        opacity: 0.8,
-      });
-      trafficLayer.addTo(mapRef.current);
-      trafficLayerRef.current = trafficLayer;
-    }
-  }, [settings.showTraffic, settings.isOfflineMode, offlineSimulate, mapType, mapVersion]);
-
   // Handle Real-Time Weather Precipitation Radar Overlay & Rain Cell Markers
   useEffect(() => {
     if (!mapRef.current) return;
-
-    if (weatherLayerRef.current) {
-      weatherLayerRef.current.remove();
-      weatherLayerRef.current = null;
-    }
 
     if (weatherCellsGroupRef.current) {
       weatherCellsGroupRef.current.clearLayers();
@@ -338,20 +283,7 @@ export default function MapView({
     }
 
     if (showWeatherRadar && !settings.isOfflineMode && !offlineSimulate) {
-      // 1. Add RainViewer's real radar tile overlay (path comes from their live manifest —
-      // there's no fixed tile URL) for Greater Jakarta
-      if (radarHost && activeRadarPath) {
-        const rainRadarUrl = `${radarHost}${activeRadarPath}/256/{z}/{x}/{y}/2/1_1.png`;
-        const weatherTile = L.tileLayer(rainRadarUrl, {
-          maxZoom: 18,
-          opacity: 0.62,
-          zIndex: 10,
-        });
-        weatherTile.addTo(mapRef.current);
-        weatherLayerRef.current = weatherTile;
-      }
-
-      // 2. Render Precipitation Density Hazard Cells on map
+      // Render Precipitation Density Hazard Cells on map
       LIVE_RAIN_CELLS.forEach((cell) => {
         let color = '#22c55e'; // light
         let fillColor = '#16a34a';
@@ -427,20 +359,7 @@ export default function MapView({
         }
       });
     }
-  }, [showWeatherRadar, settings.isOfflineMode, offlineSimulate, mapType, mapVersion, radarHost, activeRadarPath]);
-
-  // Radar Animation playback frame effect
-  useEffect(() => {
-    let interval: any = null;
-    if (isPlayingRadar && showWeatherRadar) {
-      interval = setInterval(() => {
-        setRadarFrameIndex((prev) => (prev + 1) % 5);
-      }, 1500);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isPlayingRadar, showWeatherRadar]);
+  }, [showWeatherRadar, settings.isOfflineMode, offlineSimulate, mapType, mapVersion]);
 
   // Cursor crosshair when measuring distance
   useEffect(() => {
@@ -954,7 +873,6 @@ export default function MapView({
       },
       mapConfiguration: {
         activeTileLayer: mapType,
-        showTraffic: settings.showTraffic,
         showGeofences: settings.showGeofences,
         isOfflineMode: settings.isOfflineMode || offlineSimulate,
         enableClustering,
@@ -1108,45 +1026,6 @@ export default function MapView({
         )}
       </div>
 
-      {/* Traffic Overlay Legend (visible when Traffic is active) */}
-      {settings.showTraffic && (
-        <div className="absolute bottom-6 left-4 z-20 bg-slate-950/90 text-white p-3 rounded-2xl shadow-2xl border border-rose-500/30 backdrop-blur text-xs space-y-2 pointer-events-auto animate-fade-in">
-          <div className="flex items-center justify-between gap-4 border-b border-slate-800 pb-1.5">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
-              <span className="font-extrabold text-[10px] text-rose-300 uppercase tracking-wider flex items-center gap-1">
-                <Gauge className="w-3.5 h-3.5 text-rose-400" /> Real-time Traffic Overlay
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => onUpdateSettings && onUpdateSettings({ showTraffic: false })}
-              className="text-slate-400 hover:text-white text-[10px] font-bold cursor-pointer"
-            >
-              Turn Off
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-semibold">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              <span>Smooth (&gt;60 km/h)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-              <span>Moderate (30-60)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-              <span>Heavy (&lt;30 km/h)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-950 border border-rose-500"></span>
-              <span>Port Gate Queue</span>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Real-Time Weather Radar & Route Hazard HUD Panel */}
       {showWeatherRadar && (
         <div className="absolute bottom-6 left-4 z-20 max-w-sm sm:max-w-md w-full bg-slate-950/95 text-white p-4 rounded-3xl shadow-2xl border border-cyan-500/40 backdrop-blur-md space-y-3 pointer-events-auto animate-fade-in">
@@ -1162,7 +1041,7 @@ export default function MapView({
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
                 </h4>
                 <p className="text-[10px] text-slate-400 font-mono">
-                  Greater Jakarta (Jabodetabek) Doppler Weather Radar
+                  Greater Jakarta (Jabodetabek) Precipitation Hazard Monitor
                 </p>
               </div>
             </div>
@@ -1196,7 +1075,6 @@ export default function MapView({
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-[10px] font-extrabold text-slate-300">
                   <span>Precipitation Spectrum</span>
-                  <span className="font-mono text-cyan-400">RainViewer Radar Cache</span>
                 </div>
                 <div className="grid grid-cols-4 gap-1 text-[9px] font-bold text-center">
                   <div className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 py-1 rounded-lg">
@@ -1211,37 +1089,6 @@ export default function MapView({
                   <div className="bg-rose-500/20 text-rose-300 border border-rose-500/40 py-1 rounded-lg">
                     🔴 Torrential (&gt;50)
                   </div>
-                </div>
-              </div>
-
-              {/* Time-Lapse Frame Controls */}
-              <div className="bg-slate-900/90 p-2.5 rounded-2xl border border-slate-800/80 flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPlayingRadar(!isPlayingRadar)}
-                  className={`p-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-                    isPlayingRadar ? 'bg-amber-500 text-white' : 'bg-cyan-600 hover:bg-cyan-700 text-white'
-                  }`}
-                >
-                  {isPlayingRadar ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                  <span className="text-[10px]">{isPlayingRadar ? 'Pause Loop' : 'Play Loop'}</span>
-                </button>
-
-                <div className="flex items-center gap-1 overflow-x-auto">
-                  {['-45m', '-30m', '-15m', 'LIVE NOW', '+15m FCST'].map((frame, idx) => (
-                    <button
-                      key={frame}
-                      type="button"
-                      onClick={() => setRadarFrameIndex(idx)}
-                      className={`px-2 py-1 rounded-lg text-[9px] font-bold transition cursor-pointer shrink-0 ${
-                        radarFrameIndex === idx
-                          ? 'bg-cyan-500 text-slate-950 font-black'
-                          : 'bg-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {frame}
-                    </button>
-                  ))}
                 </div>
               </div>
 
@@ -1427,42 +1274,6 @@ export default function MapView({
         </div>
       )}
 
-      {/* 2. Live Traffic Overlay Legend HUD */}
-      {settings.showTraffic && (
-        <div className="absolute bottom-6 left-4 z-20 bg-slate-900/95 backdrop-blur-md text-white p-3.5 rounded-2xl border border-slate-800 shadow-2xl max-w-xs w-full space-y-2 animate-fade-in">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <div className="flex items-center gap-1.5 font-extrabold text-xs text-rose-300">
-              <Gauge className="w-4 h-4 text-rose-400" />
-              <span>Real-Time Traffic Flow Layer</span>
-            </div>
-            <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800/80">
-              ● Live Feed
-            </span>
-          </div>
-
-          <p className="text-[10px] text-slate-400">Google Live Highway Congestion Speeds:</p>
-
-          <div className="grid grid-cols-2 gap-1.5 text-[9px] font-bold">
-            <div className="flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-800/60 p-1.5 rounded-xl text-emerald-200">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
-              <span>Smooth (&gt;80 km/h)</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-amber-950/60 border border-amber-800/60 p-1.5 rounded-xl text-amber-200">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></span>
-              <span>Moderate (40-80)</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-rose-950/60 border border-rose-800/60 p-1.5 rounded-xl text-rose-200">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0"></span>
-              <span>Heavy (15-40 km/h)</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-rose-950/90 border border-rose-600/80 p-1.5 rounded-xl text-rose-100">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-900 shrink-0 border border-white"></span>
-              <span>Standstill (&lt;15 km/h)</span>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Map controls */}
       <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
         {/* Quick Zoom In / Zoom Out Controls */}
@@ -1610,22 +1421,6 @@ export default function MapView({
             </div>
           )}
         </div>
-
-        {/* Toggle Live Traffic Overlay */}
-        {onUpdateSettings && (
-          <button
-            id="btn-toggle-traffic"
-            onClick={() => onUpdateSettings({ showTraffic: !settings.showTraffic })}
-            className={`p-2.5 rounded-xl shadow-lg hover:shadow-xl transition flex items-center justify-center border cursor-pointer ${
-              settings.showTraffic 
-                ? 'bg-rose-600 text-white border-rose-700 shadow-md ring-2 ring-rose-300' 
-                : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-100'
-            }`}
-            title={settings.showTraffic ? "Hide Real-Time Traffic Overlay" : "Show Real-Time Traffic Overlay"}
-          >
-            <Gauge className="w-5 h-5" />
-          </button>
-        )}
 
         {/* Toggle Real-Time Weather Radar & Precipitation Layer */}
         <button
