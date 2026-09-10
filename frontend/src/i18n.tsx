@@ -2,14 +2,22 @@ import { createContext, useContext, useState, ReactNode } from 'react';
 
 export type Language = 'en' | 'id';
 
-// Scope: this covers the app's persistent chrome — login, navigation, per-tab headers,
-// the sidebar utility panel, and the feedback flow — i.e. everything visible regardless
-// of which tab is open. Deep content inside individual tabs (dashboard analytics forms,
-// inventory tables, vehicle/device management forms, etc.) stays English-only; translating
-// all of that across 60+ components is a separate, much larger effort.
+// Scope: the app's persistent chrome (login, navigation, per-tab headers, sidebar utility
+// panel, feedback flow), the full Map view, and the core CRUD management pages (GPS
+// Hardware Register, and — as coverage expands — Fleet Directory, User & Role Center).
+// The larger analytics/dashboard sub-views and inventory tables stay English-only for now;
+// translating all 60+ components is a separate, much larger effort — see README.
 const translations = {
   'brand.name': { en: 'FLEET TRACKER', id: 'FLEET TRACKER' },
   'brand.subtitle': { en: 'Tangerang Logistics', id: 'Logistik Tangerang' },
+
+  'common.cancel': { en: 'Cancel', id: 'Batal' },
+  'common.save': { en: 'Save', id: 'Simpan' },
+  'common.edit': { en: 'Edit', id: 'Ubah' },
+  'common.delete': { en: 'Delete', id: 'Hapus' },
+  'common.readOnlyAccess': { en: 'Read-only access', id: 'Akses hanya-lihat' },
+  'common.actionsLocked': { en: 'Actions Locked', id: 'Aksi Terkunci' },
+  'common.locked': { en: 'Locked', id: 'Terkunci' },
 
   'login.title': { en: 'Sign in', id: 'Masuk' },
   'login.subtitle': { en: "Ask an administrator for access if you don't have an account.", id: 'Hubungi administrator untuk mendapatkan akses jika Anda belum punya akun.' },
@@ -172,6 +180,90 @@ const translations = {
   'map.copyGeoJson': { en: 'Copy GeoJSON', id: 'Salin GeoJSON' },
   'map.downloadCsv': { en: 'Download CSV', id: 'Unduh CSV' },
   'map.downloadGeoJson': { en: 'Download GeoJSON', id: 'Unduh GeoJSON' },
+
+  // GPS Hardware Register (DeviceManagement)
+  'dm.readOnlyAlert': { en: 'READ-ONLY AUDITOR MODE: You are signed in as a Viewer. Device specifications, signal diagnostic controls, and hardware configs are locked from modifications.', id: 'MODE AUDITOR HANYA-LIHAT: Anda masuk sebagai Viewer. Spesifikasi perangkat, kontrol diagnostik sinyal, dan konfigurasi perangkat keras terkunci dari perubahan.' },
+  'dm.headerDesc': { en: 'Register active telemetry hardware, tie them to vehicles via IMEI records, and check signal diagnostic integrity.', id: 'Daftarkan perangkat telemetri aktif, kaitkan ke kendaraan melalui catatan IMEI, dan periksa integritas diagnostik sinyal.' },
+  'dm.addTracker': { en: 'Add GPS Tracker', id: 'Tambah Pelacak GPS' },
+  'dm.editDeviceTitle': { en: 'Configure GPS Tracker Hardware', id: 'Konfigurasi Perangkat Pelacak GPS' },
+  'dm.registerDeviceTitle': { en: 'Register New IMEI Device', id: 'Daftarkan Perangkat IMEI Baru' },
+  'dm.hardwareId': { en: 'Hardware ID / Alias', id: 'ID Perangkat / Alias' },
+  'dm.deviceDescription': { en: 'Device Description', id: 'Deskripsi Perangkat' },
+  'dm.imeiSerial': { en: 'IMEI Hardware Serial', id: 'Nomor Seri IMEI' },
+  'dm.pingStatus': { en: 'Ping Diagnostics Status', id: 'Status Diagnostik Ping' },
+  'dm.statusOnline': { en: 'Online & Synced', id: 'Online & Tersinkron' },
+  'dm.statusOffline': { en: 'Offline / Dormant', id: 'Offline / Tidak Aktif' },
+  'dm.statusCritical': { en: 'Battery Critical Alert', id: 'Peringatan Baterai Kritis' },
+  'dm.batteryLevel': { en: 'Hardware Battery Level (%)', id: 'Level Baterai Perangkat (%)' },
+  'dm.signalQuality': { en: 'Telemetry Signal Quality', id: 'Kualitas Sinyal Telemetri' },
+  'dm.signalExcellent': { en: 'Excellent (GNSS Triangulated)', id: 'Sangat Baik (Triangulasi GNSS)' },
+  'dm.signalGood': { en: 'Good (Dual-Band Cell)', id: 'Baik (Sel Dual-Band)' },
+  'dm.signalFair': { en: 'Fair (LBS Fallback)', id: 'Cukup (Cadangan LBS)' },
+  'dm.signalPoor': { en: 'Poor / Cell Jammed', id: 'Buruk / Sel Terganggu' },
+  'dm.signalExcellentShort': { en: 'EXCELLENT', id: 'SANGAT BAIK' },
+  'dm.signalGoodShort': { en: 'GOOD', id: 'BAIK' },
+  'dm.signalFairShort': { en: 'FAIR', id: 'CUKUP' },
+  'dm.signalPoorShort': { en: 'POOR', id: 'BURUK' },
+  'dm.assignVehicle': { en: 'Assign to Active Vehicle (Optional)', id: 'Tetapkan ke Kendaraan Aktif (Opsional)' },
+  'dm.doNotAssign': { en: 'Do Not Assign (Leave in Hardware Cache)', id: 'Jangan Tetapkan (Simpan di Cache Perangkat)' },
+  'dm.saveConfig': { en: 'Save Config', id: 'Simpan Konfigurasi' },
+  'dm.registerDevice': { en: 'Register Device', id: 'Daftarkan Perangkat' },
+  'dm.battery': { en: 'Battery', id: 'Baterai' },
+  'dm.signal': { en: 'Signal', id: 'Sinyal' },
+  'dm.assignedResource': { en: 'Assigned Fleet Resource', id: 'Sumber Daya Armada yang Ditetapkan' },
+  'dm.unassigned': { en: 'UNASSIGNED HARDWARE', id: 'PERANGKAT BELUM DITETAPKAN' },
+  'dm.config': { en: 'Config', id: 'Konfigurasi' },
+  'dm.unregister': { en: 'Unregister Hardware', id: 'Batalkan Registrasi Perangkat' },
+  'dm.idExistsAlert': { en: 'Device Hardware ID already exists!', id: 'ID Perangkat sudah digunakan!' },
+
+  // Fleet Directory (VehicleManagement)
+  'vm.readOnlyAlert': { en: 'READ-ONLY AUDITOR MODE: You are signed in as a Viewer. Logistics fleet registrations, statuses, and device pairings are locked from modifications.', id: 'MODE AUDITOR HANYA-LIHAT: Anda masuk sebagai Viewer. Registrasi armada, status, dan pemasangan perangkat terkunci dari perubahan.' },
+  'vm.headerTitle': { en: 'Fleet Resource Directory', id: 'Direktori Sumber Daya Armada' },
+  'vm.headerDesc': { en: 'Register new physical transport vehicles, pair them with diagnostic tracking hardware, and allocate certified operators.', id: 'Daftarkan kendaraan transportasi baru, pasangkan dengan perangkat pelacak diagnostik, dan tetapkan operator bersertifikat.' },
+  'vm.addVehicle': { en: 'Add Vehicle', id: 'Tambah Kendaraan' },
+  'vm.editTitle': { en: 'Configure Vehicle Parameters', id: 'Konfigurasi Parameter Kendaraan' },
+  'vm.registerTitle': { en: 'Register New Fleet Asset', id: 'Daftarkan Aset Armada Baru' },
+  'vm.vehicleId': { en: 'Vehicle ID Code', id: 'Kode ID Kendaraan' },
+  'vm.assetTitle': { en: 'Asset Title / Description', id: 'Judul Aset / Deskripsi' },
+  'vm.licensePlate': { en: 'License Plate', id: 'Plat Nomor' },
+  'vm.typeProfile': { en: 'Vehicle Type Profile', id: 'Profil Jenis Kendaraan' },
+  'vm.typeTruck': { en: 'Truck (Heavy Cargo)', id: 'Truk (Kargo Berat)' },
+  'vm.typeVan': { en: 'Van (Shuttle & Spares)', id: 'Van (Antar-jemput & Suku Cadang)' },
+  'vm.typeSedan': { en: 'Sedan (Flight Courier)', id: 'Sedan (Kurir Penerbangan)' },
+  'vm.typeSuv': { en: 'SUV (Crew Transport)', id: 'SUV (Transportasi Kru)' },
+  'vm.typeMotorcycle': { en: 'Motorcycle (Rapid Courier)', id: 'Motor (Kurir Cepat)' },
+  'vm.driverOperator': { en: 'Assigned Driver Operator', id: 'Operator Pengemudi yang Ditetapkan' },
+  'vm.fullOperatorName': { en: 'Full Operator Name', id: 'Nama Lengkap Operator' },
+  'vm.phoneContact': { en: 'Driver Phone Contact', id: 'Kontak Telepon Pengemudi' },
+  'vm.maxWeight': { en: 'Max Weight Capacity (kg)', id: 'Kapasitas Berat Maksimum (kg)' },
+  'vm.pairDevice': { en: 'Pair GPS Telemetry Device', id: 'Pasangkan Perangkat Telemetri GPS' },
+  'vm.doNotPair': { en: 'Do Not Pair (Track offline)', id: 'Jangan Pasangkan (Lacak offline)' },
+  'vm.routeCorridor': { en: 'Assigned Route Corridor', id: 'Koridor Rute yang Ditetapkan' },
+  'vm.saveRouteLibrary': { en: 'Save Route to Library', id: 'Simpan Rute ke Pustaka' },
+  'vm.selectLibraryRoute': { en: 'Select Library Route', id: 'Pilih Rute dari Pustaka' },
+  'vm.manualEntry': { en: '-- Manual Entry / Custom Corridor --', id: '-- Entri Manual / Koridor Khusus --' },
+  'vm.routeOrigin': { en: 'Route Origin (From)', id: 'Asal Rute (Dari)' },
+  'vm.routeDestination': { en: 'Route Destination (To)', id: 'Tujuan Rute (Ke)' },
+  'vm.colorProfile': { en: 'Map Icon Color Profile', id: 'Profil Warna Ikon Peta' },
+  'vm.applyChanges': { en: 'Apply Changes', id: 'Terapkan Perubahan' },
+  'vm.registerAsset': { en: 'Register Asset', id: 'Daftarkan Aset' },
+  'vm.configureParams': { en: 'Configure Parameters', id: 'Konfigurasi Parameter' },
+  'vm.retireAsset': { en: 'Retire Asset', id: 'Nonaktifkan Aset' },
+  'vm.dispatchPilot': { en: 'Assigned Dispatch Pilot', id: 'Pengemudi yang Ditugaskan' },
+  'vm.pairedTransceiver': { en: 'Paired GPS Transceiver', id: 'Transceiver GPS yang Dipasangkan' },
+  'vm.unpairedHardware': { en: 'UNPAIRED HARDWARE', id: 'PERANGKAT BELUM DIPASANGKAN' },
+  'vm.assetIdLabel': { en: 'Asset ID:', id: 'ID Aset:' },
+  'vm.odometerDistance': { en: 'Odometer Distance', id: 'Jarak Odometer' },
+  'vm.engineRuntime': { en: 'Engine Runtime', id: 'Waktu Operasi Mesin' },
+  'vm.loadedWeight': { en: 'LOADED OPERATIONAL WEIGHT', id: 'BERAT MUATAN OPERASIONAL' },
+  'vm.addManualRoute': { en: 'Add Manual Route Corridor', id: 'Tambah Koridor Rute Manual' },
+  'vm.addManualRouteDesc': { en: 'Define a reusable transport corridor that can be assigned across the entire fleet.', id: 'Tentukan koridor transportasi yang dapat digunakan kembali di seluruh armada.' },
+  'vm.routeTitleLabel': { en: 'Route Title / Label', id: 'Judul Rute / Label' },
+  'vm.routeCode': { en: 'Route Code (Unique identifier)', id: 'Kode Rute (Pengenal unik)' },
+  'vm.waypointsList': { en: 'Waypoints (Comma-separated list)', id: 'Titik Jalur (Dipisahkan koma)' },
+  'vm.saveApplyRoute': { en: 'Save & Apply Route', id: 'Simpan & Terapkan Rute' },
+  'vm.idExistsAlert': { en: 'Vehicle ID already registered!', id: 'ID Kendaraan sudah terdaftar!' },
+  'vm.routeRequiredAlert': { en: 'Route title, origin, and destination are required.', id: 'Judul rute, asal, dan tujuan wajib diisi.' },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

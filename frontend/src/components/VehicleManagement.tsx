@@ -1,9 +1,10 @@
 import { useState, FormEvent } from 'react';
 import { Vehicle, GPSDevice, CustomRoute } from '../types';
-import { 
-  Truck, Plus, Edit, Trash2, Smartphone, User, Phone, 
+import {
+  Truck, Plus, Edit, Trash2, Smartphone, User, Phone,
   Weight, Sparkles, Navigation, CheckCircle, AlertTriangle, ShieldCheck, Milestone
 } from 'lucide-react';
+import { useLanguage } from '../i18n';
 
 interface VehicleManagementProps {
   vehicles: Vehicle[];
@@ -35,6 +36,7 @@ export default function VehicleManagement({
   onEditVehicle,
   onDeleteVehicle,
 }: VehicleManagementProps) {
+  const { t } = useLanguage();
   const [showForm, setShowForm] = useState(false);
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
 
@@ -74,7 +76,7 @@ export default function VehicleManagement({
       lastUpdated: new Date().toISOString(),
       batteryPercent: 100,
       fuelLevel: 100,
-      location: { lat: 3.1578, lng: 101.7120 }, // Starts at KL CC center
+      location: { lat: -6.1783, lng: 106.6319 }, // Starts at Tangerang HQ Depot
       bearing: 0,
       cargoWeight: 0,
       maxCargoWeight: Number(formMaxWeight),
@@ -97,7 +99,7 @@ export default function VehicleManagement({
       setEditingVehicleId(null);
     } else {
       if (vehicles.some(v => v.id === formId)) {
-        alert('Vehicle ID already registered!');
+        alert(t('vm.idExistsAlert'));
         return;
       }
       onAddVehicle(vehiclePayload);
@@ -109,7 +111,7 @@ export default function VehicleManagement({
   const handleSaveRouteToLibrary = (e: FormEvent) => {
     e.preventDefault();
     if (!newRouteTitle || !newRouteFrom || !newRouteTo) {
-      alert('Route title, origin, and destination are required.');
+      alert(t('vm.routeRequiredAlert'));
       return;
     }
 
@@ -191,7 +193,7 @@ export default function VehicleManagement({
       {userRole === 'viewer' && (
         <div className="bg-slate-100 border border-slate-200 text-slate-700 px-4 py-3.5 rounded-2xl flex items-center gap-2.5 text-xs font-bold shadow-sm">
           <ShieldCheck className="w-5 h-5 text-slate-500 shrink-0" />
-          <span>🔒 READ-ONLY AUDITOR MODE: You are signed in as a Viewer. Logistics fleet registrations, statuses, and device pairings are locked from modifications.</span>
+          <span>🔒 {t('vm.readOnlyAlert')}</span>
         </div>
       )}
 
@@ -202,9 +204,9 @@ export default function VehicleManagement({
             <Truck className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="font-bold text-sm text-blue-900">Fleet Resource Directory</h4>
+            <h4 className="font-bold text-sm text-blue-900">{t('vm.headerTitle')}</h4>
             <p className="text-xs text-blue-700 mt-0.5 leading-relaxed">
-              Register new physical transport vehicles, pair them with diagnostic tracking hardware, and allocate certified operators.
+              {t('vm.headerDesc')}
             </p>
           </div>
         </div>
@@ -214,16 +216,16 @@ export default function VehicleManagement({
             onClick={() => { resetForm(); setShowForm(!showForm); }}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer"
           >
-            <Plus className="w-4 h-4" /> Add Vehicle
+            <Plus className="w-4 h-4" /> {t('vm.addVehicle')}
           </button>
         ) : (
           <button
             id="btn-add-vehicle-toggle-disabled"
             disabled
             className="flex items-center gap-2 bg-slate-200 text-slate-400 px-4 py-2 rounded-xl text-xs font-bold shrink-0 cursor-not-allowed"
-            title="Read-only access"
+            title={t('common.readOnlyAccess')}
           >
-            🔒 Actions Locked
+            🔒 {t('common.actionsLocked')}
           </button>
         )}
       </div>
@@ -232,11 +234,11 @@ export default function VehicleManagement({
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-md space-y-4 animate-fade-in">
           <h3 className="font-bold text-sm text-slate-800">
-            {editingVehicleId ? '✏️ Configure Vehicle Parameters' : '🚚 Register New Fleet Asset'}
+            {editingVehicleId ? `✏️ ${t('vm.editTitle')}` : `🚚 ${t('vm.registerTitle')}`}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Vehicle ID Code *</label>
+              <label className="font-semibold text-slate-600">{t('vm.vehicleId')} *</label>
               <input
                 id="form-vehicle-id"
                 type="text"
@@ -250,7 +252,7 @@ export default function VehicleManagement({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Asset Title / Description *</label>
+              <label className="font-semibold text-slate-600">{t('vm.assetTitle')} *</label>
               <input
                 id="form-vehicle-name"
                 type="text"
@@ -263,7 +265,7 @@ export default function VehicleManagement({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">License Plate *</label>
+              <label className="font-semibold text-slate-600">{t('vm.licensePlate')} *</label>
               <input
                 id="form-vehicle-plate"
                 type="text"
@@ -276,36 +278,36 @@ export default function VehicleManagement({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Vehicle Type Profile</label>
+              <label className="font-semibold text-slate-600">{t('vm.typeProfile')}</label>
               <select
                 id="form-vehicle-type"
                 value={formType}
                 onChange={(e) => setFormType(e.target.value as any)}
                 className="p-2 border border-slate-200 rounded-lg text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="Truck">Truck (Heavy Cargo)</option>
-                <option value="Van">Van (Shuttle & Spares)</option>
-                <option value="Sedan">Sedan (Flight Courier)</option>
-                <option value="SUV">SUV (Crew Transport)</option>
-                <option value="Motorcycle">Motorcycle (Rapid Courier)</option>
+                <option value="Truck">{t('vm.typeTruck')}</option>
+                <option value="Van">{t('vm.typeVan')}</option>
+                <option value="Sedan">{t('vm.typeSedan')}</option>
+                <option value="SUV">{t('vm.typeSuv')}</option>
+                <option value="Motorcycle">{t('vm.typeMotorcycle')}</option>
               </select>
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Assigned Driver Operator *</label>
+              <label className="font-semibold text-slate-600">{t('vm.driverOperator')} *</label>
               <input
                 id="form-vehicle-driver"
                 type="text"
                 required
                 value={formDriver}
                 onChange={(e) => setFormDriver(e.target.value)}
-                placeholder="Full Operator Name"
+                placeholder={t('vm.fullOperatorName')}
                 className="p-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Driver Phone Contact *</label>
+              <label className="font-semibold text-slate-600">{t('vm.phoneContact')} *</label>
               <input
                 id="form-vehicle-phone"
                 type="text"
@@ -318,7 +320,7 @@ export default function VehicleManagement({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Max Weight Capacity (kg)</label>
+              <label className="font-semibold text-slate-600">{t('vm.maxWeight')}</label>
               <input
                 id="form-vehicle-weight"
                 type="number"
@@ -330,14 +332,14 @@ export default function VehicleManagement({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Pair GPS Telemetry Device</label>
+              <label className="font-semibold text-slate-600">{t('vm.pairDevice')}</label>
               <select
                 id="form-vehicle-device"
                 value={formDeviceId}
                 onChange={(e) => setFormDeviceId(e.target.value)}
                 className="p-2 border border-slate-200 rounded-lg text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Do Not Pair (Track offline)</option>
+                <option value="">{t('vm.doNotPair')}</option>
                 {availableDevices.map((d) => (
                   <option key={d.id} value={d.id}>
                     📡 {d.name} ({d.id} - IMEI: {d.imei})
@@ -349,7 +351,7 @@ export default function VehicleManagement({
             <div className="md:col-span-2 p-3.5 bg-indigo-55/60 rounded-xl border border-indigo-100 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-indigo-700 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
-                  <Navigation className="w-3.5 h-3.5 text-indigo-600 shrink-0" /> Assigned Route Corridor
+                  <Navigation className="w-3.5 h-3.5 text-indigo-600 shrink-0" /> {t('vm.routeCorridor')}
                 </span>
                 <button
                   type="button"
@@ -357,13 +359,13 @@ export default function VehicleManagement({
                   onClick={() => setShowAddRouteModal(true)}
                   className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9px] uppercase tracking-wider rounded flex items-center gap-1 transition shadow-xs cursor-pointer select-none"
                 >
-                  <Plus className="w-3 h-3 shrink-0" /> Save Route to Library
+                  <Plus className="w-3 h-3 shrink-0" /> {t('vm.saveRouteLibrary')}
                 </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                 <div className="flex flex-col gap-1 md:col-span-2">
-                  <label className="font-semibold text-slate-600">Select Library Route</label>
+                  <label className="font-semibold text-slate-600">{t('vm.selectLibraryRoute')}</label>
                   <select
                     id="form-vehicle-route-select"
                     value={customRoutes?.find(r => r.from === formRouteFrom && r.to === formRouteTo)?.id || ''}
@@ -379,7 +381,7 @@ export default function VehicleManagement({
                     }}
                     className="p-2 border border-slate-200 rounded-lg text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="">-- Manual Entry / Custom Corridor --</option>
+                    <option value="">{t('vm.manualEntry')}</option>
                     {customRoutes?.map((r) => (
                       <option key={r.id} value={r.id}>
                         📍 {r.title} ({r.code})
@@ -389,7 +391,7 @@ export default function VehicleManagement({
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-slate-600">Route Origin (From)</label>
+                  <label className="font-semibold text-slate-600">{t('vm.routeOrigin')}</label>
                   <input
                     id="form-vehicle-route-from"
                     type="text"
@@ -401,7 +403,7 @@ export default function VehicleManagement({
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-slate-600">Route Destination (To)</label>
+                  <label className="font-semibold text-slate-600">{t('vm.routeDestination')}</label>
                   <input
                     id="form-vehicle-route-to"
                     type="text"
@@ -416,7 +418,7 @@ export default function VehicleManagement({
 
             {/* Custom Color Selector */}
             <div className="flex flex-col gap-1 md:col-span-1">
-              <label className="font-semibold text-slate-600">Map Icon Color Profile</label>
+              <label className="font-semibold text-slate-600">{t('vm.colorProfile')}</label>
               <div className="flex gap-2 items-center h-full pt-1">
                 {VEHICLE_COLORS.map((col) => (
                   <button
@@ -442,14 +444,14 @@ export default function VehicleManagement({
               onClick={resetForm}
               className="px-4 py-2 border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-50 transition"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               id="vehicle-form-save"
               type="submit"
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition"
             >
-              {editingVehicleId ? 'Apply Changes' : 'Register Asset'}
+              {editingVehicleId ? t('vm.applyChanges') : t('vm.registerAsset')}
             </button>
           </div>
         </form>
@@ -481,7 +483,7 @@ export default function VehicleManagement({
                         {v.licensePlate}
                       </span>
                     </h4>
-                    <p className="text-[10px] font-semibold text-slate-400 capitalize">{v.type} Asset ID: {v.id}</p>
+                    <p className="text-[10px] font-semibold text-slate-400 capitalize">{v.type} {t('vm.assetIdLabel')} {v.id}</p>
                   </div>
                 </div>
 
@@ -491,7 +493,7 @@ export default function VehicleManagement({
                       id={`btn-edit-vehicle-${v.id}`}
                       onClick={() => startEdit(v)}
                       className="p-1.5 hover:bg-slate-50 text-slate-500 hover:text-blue-600 rounded-lg transition cursor-pointer"
-                      title="Configure Parameters"
+                      title={t('vm.configureParams')}
                     >
                       <Edit className="w-4 h-4" />
                     </button>
@@ -499,14 +501,14 @@ export default function VehicleManagement({
                       id={`btn-delete-vehicle-${v.id}`}
                       onClick={() => onDeleteVehicle(v.id)}
                       className="p-1.5 hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-lg transition cursor-pointer"
-                      title="Retire Asset"
+                      title={t('vm.retireAsset')}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ) : (
                   <span className="text-[10px] text-slate-400 font-bold bg-slate-100 px-2 py-1 rounded-lg">
-                    🔒 Locked
+                    🔒 {t('common.locked')}
                   </span>
                 )}
               </div>
@@ -514,11 +516,11 @@ export default function VehicleManagement({
               {/* Operator details & Device details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
-                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">Assigned Dispatch Pilot</span>
+                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">{t('vm.dispatchPilot')}</span>
                   <div className="flex items-center gap-2">
-                    <img 
-                      src={v.avatar} 
-                      alt={v.driverName} 
+                    <img
+                      src={v.avatar}
+                      alt={v.driverName}
                       className="w-8 h-8 rounded-full object-cover border border-slate-200"
                       referrerPolicy="no-referrer"
                     />
@@ -530,7 +532,7 @@ export default function VehicleManagement({
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between">
-                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">Paired GPS Transceiver</span>
+                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">{t('vm.pairedTransceiver')}</span>
                   {correspondingDevice ? (
                     <div className="space-y-0.5">
                       <p className="font-bold text-blue-700 leading-tight truncate">{correspondingDevice.name}</p>
@@ -538,7 +540,7 @@ export default function VehicleManagement({
                     </div>
                   ) : (
                     <p className="text-[10px] font-bold text-amber-600 uppercase flex items-center gap-1 mt-1">
-                      <AlertTriangle className="w-3.5 h-3.5" /> UNPAIRED HARDWARE
+                      <AlertTriangle className="w-3.5 h-3.5" /> {t('vm.unpairedHardware')}
                     </p>
                   )}
                 </div>
@@ -547,16 +549,16 @@ export default function VehicleManagement({
               {/* Assigned Route Corridor */}
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2 text-xs">
                 <span className="text-[9px] text-indigo-600 font-extrabold uppercase tracking-wider block flex items-center gap-1">
-                  <Navigation className="w-3.5 h-3.5 text-indigo-500 shrink-0" /> Assigned Route Corridor
+                  <Navigation className="w-3.5 h-3.5 text-indigo-500 shrink-0" /> {t('vm.routeCorridor')}
                 </span>
                 <div className="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-lg border border-slate-100">
                   <div className="min-w-0 flex-1">
-                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wide">Origin (From)</p>
+                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wide">{t('vm.routeOrigin')}</p>
                     <p className="font-extrabold text-slate-700 truncate text-[11px]">{v.routeFrom || 'Tangerang HQ Depot'}</p>
                   </div>
                   <div className="text-slate-350 px-1 font-extrabold text-xs">➡️</div>
                   <div className="min-w-0 flex-1 text-right">
-                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wide">Destination (To)</p>
+                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wide">{t('vm.routeDestination')}</p>
                     <p className="font-extrabold text-slate-700 truncate text-[11px]">{v.routeTo || 'CGK Airport Cargo Terminal'}</p>
                   </div>
                 </div>
@@ -565,11 +567,11 @@ export default function VehicleManagement({
               {/* Odometer & Engine Runtime Stats */}
               <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
                 <div>
-                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">Odometer Distance</span>
+                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">{t('vm.odometerDistance')}</span>
                   <span className="font-mono font-bold text-slate-700">{(v.odometer ?? 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <span className="text-[9px] font-bold text-slate-400 font-sans">km</span></span>
                 </div>
                 <div>
-                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">Engine Runtime</span>
+                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">{t('vm.engineRuntime')}</span>
                   <span className="font-mono font-bold text-slate-700">{(v.engineHours ?? 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <span className="text-[9px] font-bold text-slate-400 font-sans">hrs</span></span>
                 </div>
               </div>
@@ -577,7 +579,7 @@ export default function VehicleManagement({
               {/* Integrated Loaded Cargo Weights progress bar */}
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase">
-                  <span>LOADED OPERATIONAL WEIGHT</span>
+                  <span>{t('vm.loadedWeight')}</span>
                   <span className={ratio >= 90 ? 'text-rose-600 font-extrabold' : 'text-slate-700'}>
                     {v.cargoWeight.toLocaleString()} / {v.maxCargoWeight.toLocaleString()} kg ({ratio.toFixed(0)}%)
                   </span>
@@ -609,14 +611,14 @@ export default function VehicleManagement({
                 <Milestone className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-extrabold text-sm text-slate-900">Add Manual Route Corridor</h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">Define a reusable transport corridor that can be assigned across the entire fleet.</p>
+                <h3 className="font-extrabold text-sm text-slate-900">{t('vm.addManualRoute')}</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">{t('vm.addManualRouteDesc')}</p>
               </div>
             </div>
 
             <form onSubmit={handleSaveRouteToLibrary} className="space-y-3.5 text-xs">
               <div className="flex flex-col gap-1">
-                <label className="font-semibold text-slate-600">Route Title / Label</label>
+                <label className="font-semibold text-slate-600">{t('vm.routeTitleLabel')}</label>
                 <input
                   id="modal-route-title"
                   type="text"
@@ -630,7 +632,7 @@ export default function VehicleManagement({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-slate-600">Route Origin (From)</label>
+                  <label className="font-semibold text-slate-600">{t('vm.routeOrigin')}</label>
                   <input
                     id="modal-route-from"
                     type="text"
@@ -642,7 +644,7 @@ export default function VehicleManagement({
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-slate-600">Route Destination (To)</label>
+                  <label className="font-semibold text-slate-600">{t('vm.routeDestination')}</label>
                   <input
                     id="modal-route-to"
                     type="text"
@@ -657,7 +659,7 @@ export default function VehicleManagement({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-slate-600">Route Code (Unique identifier)</label>
+                  <label className="font-semibold text-slate-600">{t('vm.routeCode')}</label>
                   <input
                     id="modal-route-code"
                     type="text"
@@ -668,7 +670,7 @@ export default function VehicleManagement({
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-slate-600">Waypoints (Comma-separated list)</label>
+                  <label className="font-semibold text-slate-600">{t('vm.waypointsList')}</label>
                   <input
                     id="modal-route-waypoints"
                     type="text"
@@ -687,14 +689,14 @@ export default function VehicleManagement({
                   onClick={() => setShowAddRouteModal(false)}
                   className="px-4 py-2 border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-50 transition cursor-pointer select-none"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   id="modal-route-save"
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow transition cursor-pointer select-none"
                 >
-                  Save & Apply Route
+                  {t('vm.saveApplyRoute')}
                 </button>
               </div>
             </form>

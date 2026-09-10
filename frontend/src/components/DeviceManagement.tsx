@@ -1,7 +1,8 @@
 import { useState, FormEvent } from 'react';
 import { GPSDevice, Vehicle } from '../types';
-import { 
-  Cpu, Plus, Edit, Trash2, CheckCircle, AlertTriangle, 
+import { useLanguage } from '../i18n';
+import {
+  Cpu, Plus, Edit, Trash2, CheckCircle, AlertTriangle,
   Battery, Wifi, Eye, RefreshCw, Radio, ShieldCheck
 } from 'lucide-react';
 
@@ -22,6 +23,7 @@ export default function DeviceManagement({
   onEditDevice,
   onDeleteDevice,
 }: DeviceManagementProps) {
+  const { t } = useLanguage();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
 
@@ -55,7 +57,7 @@ export default function DeviceManagement({
     } else {
       // Check if ID is unique
       if (devices.some(d => d.id === formId)) {
-        alert('Device Hardware ID already exists!');
+        alert(t('dm.idExistsAlert'));
         return;
       }
       onAddDevice(devicePayload);
@@ -103,13 +105,26 @@ export default function DeviceManagement({
     return 'text-emerald-600 bg-emerald-50 border-emerald-200';
   };
 
+  const deviceStatusLabel = (status: string) => {
+    if (status === 'online') return t('dm.statusOnline');
+    if (status === 'low_battery') return t('dm.statusCritical');
+    return t('dm.statusOffline');
+  };
+
+  const signalStrengthLabel = (strength: string) => {
+    if (strength === 'excellent') return t('dm.signalExcellentShort');
+    if (strength === 'good') return t('dm.signalGoodShort');
+    if (strength === 'fair') return t('dm.signalFairShort');
+    return t('dm.signalPoorShort');
+  };
+
   return (
     <div className="space-y-6">
       {/* Read-Only Status Alert */}
       {userRole === 'viewer' && (
         <div className="bg-slate-100 border border-slate-200 text-slate-700 px-4 py-3.5 rounded-2xl flex items-center gap-2.5 text-xs font-bold shadow-sm">
           <ShieldCheck className="w-5 h-5 text-slate-500 shrink-0" />
-          <span>🔒 READ-ONLY AUDITOR MODE: You are signed in as a Viewer. Device specifications, signal diagnostic controls, and hardware configs are locked from modifications.</span>
+          <span>🔒 {t('dm.readOnlyAlert')}</span>
         </div>
       )}
 
@@ -120,9 +135,9 @@ export default function DeviceManagement({
             <Radio className="w-4 h-4 animate-pulse" />
           </div>
           <div>
-            <h4 className="font-bold text-sm text-blue-900">GPS Hardware Register</h4>
+            <h4 className="font-bold text-sm text-blue-900">{t('nav.devices')}</h4>
             <p className="text-xs text-blue-700 mt-0.5 leading-relaxed">
-              Register active telemetry hardware, tie them to vehicles via IMEI records, and check signal diagnostic integrity.
+              {t('dm.headerDesc')}
             </p>
           </div>
         </div>
@@ -132,16 +147,16 @@ export default function DeviceManagement({
             onClick={() => { resetForm(); setShowAddForm(!showAddForm); }}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer"
           >
-            <Plus className="w-4 h-4" /> Add GPS Tracker
+            <Plus className="w-4 h-4" /> {t('dm.addTracker')}
           </button>
         ) : (
           <button
             id="btn-add-device-toggle-disabled"
             disabled
             className="flex items-center gap-2 bg-slate-200 text-slate-400 px-4 py-2 rounded-xl text-xs font-bold shrink-0 cursor-not-allowed"
-            title="Read-only access"
+            title={t('common.readOnlyAccess')}
           >
-            🔒 Actions Locked
+            🔒 {t('common.actionsLocked')}
           </button>
         )}
       </div>
@@ -150,11 +165,11 @@ export default function DeviceManagement({
       {showAddForm && (
         <form onSubmit={handleSubmit} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-md space-y-4 animate-fade-in">
           <h3 className="font-bold text-sm text-slate-800">
-            {editingDeviceId ? '✏️ Configure GPS Tracker Hardware' : '📡 Register New IMEI Device'}
+            {editingDeviceId ? `✏️ ${t('dm.editDeviceTitle')}` : `📡 ${t('dm.registerDeviceTitle')}`}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Hardware ID / Alias *</label>
+              <label className="font-semibold text-slate-600">{t('dm.hardwareId')} *</label>
               <input
                 id="form-device-id"
                 type="text"
@@ -168,7 +183,7 @@ export default function DeviceManagement({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Device Description *</label>
+              <label className="font-semibold text-slate-600">{t('dm.deviceDescription')} *</label>
               <input
                 id="form-device-name"
                 type="text"
@@ -181,7 +196,7 @@ export default function DeviceManagement({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">IMEI Hardware Serial *</label>
+              <label className="font-semibold text-slate-600">{t('dm.imeiSerial')} *</label>
               <input
                 id="form-device-imei"
                 type="text"
@@ -194,21 +209,21 @@ export default function DeviceManagement({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Ping Diagnostics Status</label>
+              <label className="font-semibold text-slate-600">{t('dm.pingStatus')}</label>
               <select
                 id="form-device-status"
                 value={formStatus}
                 onChange={(e) => setFormStatus(e.target.value as any)}
                 className="p-2 border border-slate-200 rounded-lg text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="online">Online & Synced</option>
-                <option value="offline">Offline / Dormant</option>
-                <option value="low_battery">Battery Critical Alert</option>
+                <option value="online">{t('dm.statusOnline')}</option>
+                <option value="offline">{t('dm.statusOffline')}</option>
+                <option value="low_battery">{t('dm.statusCritical')}</option>
               </select>
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Hardware Battery Level (%)</label>
+              <label className="font-semibold text-slate-600">{t('dm.batteryLevel')}</label>
               <input
                 id="form-device-battery"
                 type="number"
@@ -221,29 +236,29 @@ export default function DeviceManagement({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="font-semibold text-slate-600">Telemetry Signal Quality</label>
+              <label className="font-semibold text-slate-600">{t('dm.signalQuality')}</label>
               <select
                 id="form-device-signal"
                 value={formSignal}
                 onChange={(e) => setFormSignal(e.target.value as any)}
                 className="p-2 border border-slate-200 rounded-lg text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="excellent">Excellent (GNSS Triangulated)</option>
-                <option value="good">Good (Dual-Band Cell)</option>
-                <option value="fair">Fair (LBS Fallback)</option>
-                <option value="poor">Poor / Cell Jammed</option>
+                <option value="excellent">{t('dm.signalExcellent')}</option>
+                <option value="good">{t('dm.signalGood')}</option>
+                <option value="fair">{t('dm.signalFair')}</option>
+                <option value="poor">{t('dm.signalPoor')}</option>
               </select>
             </div>
 
             <div className="flex flex-col gap-1 md:col-span-3">
-              <label className="font-semibold text-slate-600">Assign to Active Vehicle (Optional)</label>
+              <label className="font-semibold text-slate-600">{t('dm.assignVehicle')}</label>
               <select
                 id="form-device-vehicle"
                 value={formVehicleId}
                 onChange={(e) => setFormVehicleId(e.target.value)}
                 className="p-2 border border-slate-200 rounded-lg text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Do Not Assign (Leave in Hardware Cache)</option>
+                <option value="">{t('dm.doNotAssign')}</option>
                 {vehicles.map((v) => (
                   <option key={v.id} value={v.id}>
                     🚚 {v.name} ({v.licensePlate})
@@ -260,14 +275,14 @@ export default function DeviceManagement({
               onClick={resetForm}
               className="px-4 py-2 border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-50 transition"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               id="device-form-save"
               type="submit"
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition"
             >
-              {editingDeviceId ? 'Save Config' : 'Register Device'}
+              {editingDeviceId ? t('dm.saveConfig') : t('dm.registerDevice')}
             </button>
           </div>
         </form>
@@ -303,7 +318,7 @@ export default function DeviceManagement({
                         ? 'bg-rose-100 text-rose-700 border-rose-200' 
                         : 'bg-emerald-100 text-emerald-700 border-emerald-200 animate-pulse'
                   }`}>
-                    {device.status.replace('_', ' ')}
+                    {deviceStatusLabel(device.status)}
                   </span>
                 </div>
 
@@ -318,7 +333,7 @@ export default function DeviceManagement({
                   <div className={`p-2 rounded-xl border flex items-center justify-between text-[10px] ${getBatteryColor(device.batteryLevel)}`}>
                     <div className="flex items-center gap-1">
                       <Battery className="w-3.5 h-3.5 shrink-0" />
-                      <span className="font-semibold">Battery</span>
+                      <span className="font-semibold">{t('dm.battery')}</span>
                     </div>
                     <span className="font-extrabold font-mono">{device.batteryLevel}%</span>
                   </div>
@@ -326,15 +341,15 @@ export default function DeviceManagement({
                   <div className="p-2 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between text-[10px] text-slate-600">
                     <div className="flex items-center gap-1">
                       <Wifi className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                      <span className="font-semibold font-mono">Signal</span>
+                      <span className="font-semibold font-mono">{t('dm.signal')}</span>
                     </div>
-                    <span className="font-bold truncate max-w-[50px]">{device.signalStrength.toUpperCase()}</span>
+                    <span className="font-bold truncate max-w-[50px]">{signalStrengthLabel(device.signalStrength).toUpperCase()}</span>
                   </div>
                 </div>
 
                 {/* Assigned Vehicle */}
                 <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1">Assigned Fleet Resource</p>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1">{t('dm.assignedResource')}</p>
                   {matchedVehicle ? (
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-800 truncate max-w-[150px]">{matchedVehicle.name}</span>
@@ -344,7 +359,7 @@ export default function DeviceManagement({
                     </div>
                   ) : (
                     <span className="text-slate-400 font-bold text-[10px] uppercase flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> UNASSIGNED HARDWARE
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> {t('dm.unassigned')}
                     </span>
                   )}
                 </div>
@@ -359,20 +374,20 @@ export default function DeviceManagement({
                       onClick={() => startEdit(device)}
                       className="px-2.5 py-1.5 border border-slate-200 text-slate-600 hover:text-blue-600 hover:bg-slate-50 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
                     >
-                      <Edit className="w-3 h-3" /> Config
+                      <Edit className="w-3 h-3" /> {t('dm.config')}
                     </button>
                     <button
                       id={`btn-delete-device-${device.id}`}
                       onClick={() => onDeleteDevice(device.id)}
                       className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
-                      title="Unregister Hardware"
+                      title={t('dm.unregister')}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </>
                 ) : (
                   <span className="text-[10px] text-slate-400 font-bold bg-slate-100 px-2.5 py-1 rounded-lg">
-                    🔒 Locked
+                    🔒 {t('common.locked')}
                   </span>
                 )}
               </div>
