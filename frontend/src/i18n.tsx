@@ -69,6 +69,8 @@ const translations = {
   'feedback.messagePlaceholder': { en: 'Describe the issue or idea...', id: 'Jelaskan masalah atau ide Anda...' },
   'feedback.imageLabel': { en: 'Screenshot (optional)', id: 'Tangkapan layar (opsional)' },
   'feedback.attachImage': { en: 'Attach image', id: 'Lampirkan gambar' },
+  'feedback.pasteHint': { en: 'or paste an image (Ctrl+V)', id: 'atau tempel gambar (Ctrl+V)' },
+  'feedback.pasted': { en: 'Pasted!', id: 'Tertempel!' },
   'feedback.cancel': { en: 'Cancel', id: 'Batal' },
   'feedback.send': { en: 'Send', id: 'Kirim' },
   'feedback.sending': { en: 'Sending…', id: 'Mengirim…' },

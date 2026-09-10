@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { MessageSquarePlus, ImagePlus, X, Loader2, CheckCircle2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { MessageSquarePlus, ImagePlus, X, Loader2, CheckCircle2, ClipboardPaste } from 'lucide-react';
 import { api } from '../api';
 import { useLanguage } from '../i18n';
 
@@ -12,7 +12,32 @@ export default function FeedbackModal() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [justPasted, setJustPasted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Paste an image (Ctrl+V) anywhere while the modal is open — works regardless of which
+  // element has focus, since browsers only dispatch clipboard events to a focused editable
+  // element by default and the message textarea isn't always where the cursor is.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            handleFileChange(file);
+            setJustPasted(true);
+            setTimeout(() => setJustPasted(false), 1500);
+          }
+          break;
+        }
+      }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [isOpen]);
 
   const reset = () => {
     setMessage('');
@@ -20,6 +45,7 @@ export default function FeedbackModal() {
     setImagePreview(null);
     setError(null);
     setSuccess(false);
+    setJustPasted(false);
   };
 
   const close = () => {
@@ -96,7 +122,14 @@ export default function FeedbackModal() {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-semibold text-slate-600">{t('feedback.imageLabel')}</label>
+                  <label className="font-semibold text-slate-600 flex items-center justify-between">
+                    {t('feedback.imageLabel')}
+                    {justPasted && (
+                      <span className="text-emerald-600 font-bold flex items-center gap-1 normal-case">
+                        <ClipboardPaste className="w-3 h-3" /> {t('feedback.pasted')}
+                      </span>
+                    )}
+                  </label>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -115,12 +148,15 @@ export default function FeedbackModal() {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center justify-center gap-1.5 py-3 border-2 border-dashed border-slate-200 rounded-lg text-slate-400 hover:border-blue-300 hover:text-blue-500 transition"
-                    >
-                      <ImagePlus className="w-4 h-4" /> {t('feedback.attachImage')}
-                    </button>
+                    <>
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center justify-center gap-1.5 py-3 border-2 border-dashed border-slate-200 rounded-lg text-slate-400 hover:border-blue-300 hover:text-blue-500 transition"
+                      >
+                        <ImagePlus className="w-4 h-4" /> {t('feedback.attachImage')}
+                      </button>
+                      <p className="text-[10px] text-slate-400 text-center">{t('feedback.pasteHint')}</p>
+                    </>
                   )}
                 </div>
 
