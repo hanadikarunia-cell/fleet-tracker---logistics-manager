@@ -178,6 +178,22 @@ create table if not exists app_users (
   created_at timestamptz not null default now()
 );
 
+create table if not exists feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  user_name text,
+  message text not null,
+  image_url text,
+  status text not null default 'new' check (status in ('new', 'reviewed', 'resolved')),
+  created_at timestamptz not null default now()
+);
+
+-- Public bucket: the backend (service role) is the only writer, but reads happen directly
+-- against Supabase's public object URL — no need to proxy image bytes through our own API.
+insert into storage.buckets (id, name, public)
+values ('feedback-images', 'feedback-images', true)
+on conflict (id) do nothing;
+
 -- Row Level Security: browser reads via Supabase Realtime/anon key are read-only, and only for
 -- operational tables — never app_users, which holds real account identities. All writes (and
 -- all app_users access) go through the backend service-role key, which bypasses RLS and is
@@ -192,6 +208,7 @@ alter table inventory_items enable row level security;
 alter table inventory_movements enable row level security;
 alter table location_history enable row level security;
 alter table app_users enable row level security;
+alter table feedback enable row level security;
 
 do $$
 declare

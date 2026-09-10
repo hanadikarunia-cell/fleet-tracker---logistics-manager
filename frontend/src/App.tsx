@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Vehicle, GPSDevice, Geofence, GeofenceAlert, FleetAlert,
   MaintenanceLog, DriverPerformance, InventoryItem,
-  LocationHistoryPoint, MapSettings, AppUser, UserRole, CustomRoute
+  LocationHistoryPoint, MapSettings, AppUser, UserRole, CustomRoute, Feedback, FeedbackStatus
 } from './types';
 import { api } from './api';
 import { supabase } from './supabaseClient';
@@ -14,6 +14,8 @@ import DriverPerformanceView from './components/DriverPerformanceView';
 import DeviceManagement from './components/DeviceManagement';
 import VehicleManagement from './components/VehicleManagement';
 import UserRoleManagement from './components/UserRoleManagement';
+import FeedbackModal from './components/FeedbackModal';
+import FeedbackView from './components/FeedbackView';
 import QuickAssetLocateBar from './components/common/QuickAssetLocateBar';
 import VehicleTelemetryHistoryView from './components/telemetry/VehicleTelemetryHistoryView';
 import PredictiveArrivalEstimatorView from './components/analytics/PredictiveArrivalEstimatorView';
@@ -23,11 +25,11 @@ import type { Session } from '@supabase/supabase-js';
 import {
   Map, LayoutDashboard, Boxes, Users, Cpu, Truck,
   Plus, AlertOctagon, Info, Layers, Smartphone, Sparkles, Navigation, Fingerprint,
-  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut
+  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare
 } from 'lucide-react';
 
 export const ROLE_MODULES: Record<UserRole, string[]> = {
-  admin: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory', 'drivers', 'vehicles', 'devices', 'users'],
+  admin: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory', 'drivers', 'vehicles', 'devices', 'users', 'feedback'],
   manager: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory', 'drivers', 'vehicles'],
   viewer: ['map', 'dashboard', 'telemetry', 'eta', 'drivers'],
 };
@@ -58,6 +60,7 @@ export default function App() {
   });
 
   const [users, setUsers] = useState<AppUser[]>([]);
+  const [feedback, setFeedback] = useState<Feedback[]>([]);
 
   // --- AUTH: real Supabase login, not a demo persona switcher ---
   const [session, setSession] = useState<Session | null | undefined>(undefined); // undefined = not checked yet
@@ -113,7 +116,7 @@ export default function App() {
   }, [customRoutes]);
 
   // --- 2. INTERACTIVE UI STATES ---
-  const [activeTab, setActiveTab] = useState<'map' | 'dashboard' | 'telemetry' | 'eta' | 'efficiency' | 'inventory' | 'drivers' | 'devices' | 'vehicles' | 'users'>('map');
+  const [activeTab, setActiveTab] = useState<'map' | 'dashboard' | 'telemetry' | 'eta' | 'efficiency' | 'inventory' | 'drivers' | 'devices' | 'vehicles' | 'users' | 'feedback'>('map');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [historyPoints, setHistoryPoints] = useState<LocationHistoryPoint[] | null>(null);
   const [isPlayingHistory, setIsPlayingHistory] = useState(false);
@@ -209,12 +212,31 @@ export default function App() {
     };
   }, [currentUser?.id]);
 
-  // The account roster is admin-only (both on the backend and in the UI) — only fetch it
-  // for admins, and only once we know that's who's logged in.
+  // The account roster and feedback inbox are admin-only (both on the backend and in the UI)
+  // — only fetch them for admins, and only once we know that's who's logged in.
   useEffect(() => {
     if (currentUser?.role !== 'admin') return;
     api.users.list().then(setUsers).catch((err) => console.error('Failed to load users:', err));
   }, [currentUser?.role]);
+
+  const loadFeedback = () => {
+    if (currentUser?.role !== 'admin') return;
+    api.feedback.list().then(setFeedback).catch((err) => console.error('Failed to load feedback:', err));
+  };
+
+  // Fetch on login (for the sidebar badge), refetch whenever the tab is opened (in case new
+  // feedback came in since), and poll while logged in so the badge count stays reasonably
+  // fresh without needing a Realtime channel over a table that's intentionally not public.
+  useEffect(() => {
+    loadFeedback();
+    if (currentUser?.role !== 'admin') return;
+    const interval = setInterval(loadFeedback, 60000);
+    return () => clearInterval(interval);
+  }, [currentUser?.role]);
+
+  useEffect(() => {
+    if (activeTab === 'feedback') loadFeedback();
+  }, [activeTab]);
 
   // Live pushes: vehicle positions and new alerts stream in via Supabase Realtime
   // instead of polling. Writes still go through the backend API.
@@ -721,6 +743,17 @@ export default function App() {
     setUsers((prev) => prev.filter((user) => user.id !== userId));
   };
 
+  // --- FEEDBACK (admin-only review) ---
+  const handleUpdateFeedbackStatus = async (id: string, status: FeedbackStatus) => {
+    const updated = await api.feedback.updateStatus(id, status);
+    setFeedback((prev) => prev.map((f) => (f.id === id ? updated : f)));
+  };
+
+  const handleDeleteFeedback = async (id: string) => {
+    await api.feedback.remove(id);
+    setFeedback((prev) => prev.filter((f) => f.id !== id));
+  };
+
   if (session === undefined) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-950 text-slate-400 text-sm font-semibold gap-2">
@@ -962,11 +995,33 @@ export default function App() {
               </button>
             )}
 
+            {ROLE_MODULES[currentUser.role].includes('feedback') && (
+              <button
+                id="tab-feedback"
+                onClick={() => setActiveTab('feedback')}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'feedback'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <MessageSquare className="w-4 h-4" /> User Feedback
+                </span>
+                {feedback.filter((f) => f.status === 'new').length > 0 && (
+                  <span className="bg-rose-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center shrink-0">
+                    {feedback.filter((f) => f.status === 'new').length}
+                  </span>
+                )}
+              </button>
+            )}
+
           </nav>
         </div>
 
         {/* Bottom Utility controls */}
         <div className="p-4 border-t border-slate-800 space-y-3">
+          <FeedbackModal />
           <div className="p-3 bg-slate-800 rounded-xl border border-slate-700/50 space-y-1.5 text-xs">
             <div className="flex justify-between items-center text-slate-400 font-semibold text-[10px] uppercase">
               <span>Telemetry Ping Rate</span>
@@ -1024,6 +1079,7 @@ export default function App() {
               {activeTab === 'vehicles' && 'Vehicle Directory'}
               {activeTab === 'devices' && 'GPS Telemetry Register'}
               {activeTab === 'users' && 'User Role & Permissions Center'}
+              {activeTab === 'feedback' && 'User Feedback Inbox'}
             </h2>
             <p className="text-xs text-slate-500 font-semibold">
               {activeTab === 'map' && 'Track physical assets en-route across Greater Jakarta (Jabodetabek).'}
@@ -1036,6 +1092,7 @@ export default function App() {
               {activeTab === 'vehicles' && 'Add, edit, or retire transport vehicle assets from active dispatch cycles.'}
               {activeTab === 'devices' && 'Bind hardware IMEI transceivers to track precise geographic telemetry.'}
               {activeTab === 'users' && 'Manage system operator accounts, operational roles, and security policies.'}
+              {activeTab === 'feedback' && 'Bug reports and suggestions submitted from inside the app, with screenshots.'}
             </p>
           </div>
 
@@ -1289,6 +1346,15 @@ export default function App() {
               onAddUser={handleAddUser}
               onUpdateUserRole={handleUpdateUserRole}
               onDeleteUser={handleDeleteUser}
+            />
+          )}
+
+          {/* TAB 8: USER FEEDBACK INBOX */}
+          {activeTab === 'feedback' && (
+            <FeedbackView
+              feedback={feedback}
+              onUpdateStatus={handleUpdateFeedbackStatus}
+              onDelete={handleDeleteFeedback}
             />
           )}
 

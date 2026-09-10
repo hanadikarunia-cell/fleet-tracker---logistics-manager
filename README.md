@@ -66,6 +66,8 @@ See `backend/src/index.ts` for the full route list. Key endpoints:
 | GET | `/api/vehicles` | All vehicles with their latest position |
 | GET | `/api/vehicles/:id/history` | Location history for one vehicle |
 | CRUD | `/api/vehicles`, `/api/devices`, `/api/geofences`, `/api/alerts`, `/api/maintenance`, `/api/driver-performance`, `/api/inventory`, `/api/inventory-movements`, `/api/users` | Standard REST |
+| POST | `/api/feedback` | Submit feedback (multipart form: `message`, optional `image`) — any logged-in role |
+| GET/PUT/DELETE | `/api/feedback` | Review/triage feedback — admin only |
 
 ## 3. Run the frontend
 
@@ -132,6 +134,13 @@ first admin account is created once via `npm run bootstrap-admin` (see
 above). Every logged-in user can change their own password from the same
 screen. `POST /api/positions` (device ingest) is the one endpoint that
 doesn't require login, since phones/trackers don't authenticate as a user.
+
+Any logged-in user (any role) can send feedback — a message plus an optional
+screenshot — from the **Send Feedback** button in the sidebar. Only admins
+see the **User Feedback** tab where it's reviewed (with a badge showing how
+many are still `new`); images are stored in a public Supabase Storage bucket
+(`feedback-images`) that only the backend, using the service-role key, ever
+writes to.
 
 ## Notes
 

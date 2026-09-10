@@ -1,23 +1,36 @@
 import type {
   Vehicle, GPSDevice, Geofence, FleetAlert, MaintenanceLog,
-  DriverPerformance, InventoryItem, InventoryMovement, LocationHistoryPoint, AppUser,
+  DriverPerformance, InventoryItem, InventoryMovement, LocationHistoryPoint, AppUser, Feedback, FeedbackStatus,
 } from './types';
 import { supabase } from './supabaseClient';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001';
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+async function authHeaders(): Promise<Record<string, string>> {
   const session = supabase ? (await supabase.auth.getSession()).data.session : null;
-  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+}
 
-  const res = await fetch(`${API_URL}${path}`, { headers, ...options });
+async function handleResponse<T>(res: Response, path: string): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Request to ${path} failed with status ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(await authHeaders()) };
+  const res = await fetch(`${API_URL}${path}`, { headers, ...options });
+  return handleResponse<T>(res, path);
+}
+
+// For multipart/form-data uploads — no Content-Type here, the browser sets it (with boundary)
+// when given a FormData body directly.
+async function requestForm<T>(path: string, formData: FormData, method = 'POST'): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, { method, headers: await authHeaders(), body: formData });
+  return handleResponse<T>(res, path);
 }
 
 const get = <T>(path: string) => request<T>(path);
@@ -82,6 +95,17 @@ export const api = {
   },
   auth: {
     me: () => get<AppUser>('/api/auth/me'),
+  },
+  feedback: {
+    list: () => get<Feedback[]>('/api/feedback'),
+    submit: (message: string, image?: File) => {
+      const form = new FormData();
+      form.append('message', message);
+      if (image) form.append('image', image);
+      return requestForm<Feedback>('/api/feedback', form);
+    },
+    updateStatus: (id: string, status: FeedbackStatus) => put<Feedback>(`/api/feedback/${id}`, { status }),
+    remove: (id: string) => del(`/api/feedback/${id}`),
   },
   positions: {
     report: (p: { device_id: string; lat: number; lng: number; speed?: number; heading?: number; timestamp?: string }) =>

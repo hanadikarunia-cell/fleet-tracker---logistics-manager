@@ -186,3 +186,15 @@ export interface AppUser {
   department?: string;
 }
 
+export type FeedbackStatus = 'new' | 'reviewed' | 'resolved';
+
+export interface Feedback {
+  id: string;
+  userId: string | null;
+  userName: string | null;
+  message: string;
+  imageUrl: string | null;
+  status: FeedbackStatus;
+  createdAt: string;
+}
+
