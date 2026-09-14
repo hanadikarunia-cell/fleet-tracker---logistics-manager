@@ -225,6 +225,278 @@ alter table app_users enable row level security;
 alter table feedback enable row level security;
 alter table changelog enable row level security;
 
+-- =========================================================================
+-- PHASE 1 — MULTI-TENANCY: tenants table, tenant_id backfill, tenant-aware RLS
+-- =========================================================================
+-- Everything below is additive and safe to run against the existing production
+-- database: new table, nullable-then-required columns backfilled to a single
+-- bootstrap tenant, then RLS policies swapped from "anyone can read everything"
+-- to "only rows belonging to the caller's own tenant". No existing row is
+-- deleted, no existing primary key is touched.
+
+-- ---------------------------------------------------------------------------
+-- Step 1: tenants table
+-- ---------------------------------------------------------------------------
+create table if not exists tenants (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  subdomain text not null unique
+    check (subdomain ~ '^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$'),
+  custom_domain text unique,
+  plan text not null default 'standard',
+  status text not null default 'active'
+    check (status in ('active', 'suspended', 'trial')),
+  logo text,
+  primary_color text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
+-- Step 2: bootstrap tenant — the existing production data becomes this tenant.
+-- ---------------------------------------------------------------------------
+insert into tenants (name, subdomain, plan, status)
+values ('Tangerang Logistics', 'tangerang-logistics', 'standard', 'active')
+on conflict (subdomain) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- Step 3: nullable tenant_id columns. Nullable first so this ALTER can never
+-- fail against rows that don't have a tenant yet — Step 4 backfills them,
+-- Step 6 (below) then locks the column down once every row is populated.
+-- changelog is intentionally excluded: it's platform-wide release notes,
+-- not tenant-owned data.
+-- ---------------------------------------------------------------------------
+alter table gps_devices         add column if not exists tenant_id uuid;
+alter table vehicles            add column if not exists tenant_id uuid;
+alter table geofences           add column if not exists tenant_id uuid;
+alter table fleet_alerts        add column if not exists tenant_id uuid;
+alter table maintenance_logs    add column if not exists tenant_id uuid;
+alter table driver_performance  add column if not exists tenant_id uuid;
+alter table inventory_items     add column if not exists tenant_id uuid;
+alter table inventory_movements add column if not exists tenant_id uuid;
+alter table location_history    add column if not exists tenant_id uuid;
+alter table app_users           add column if not exists tenant_id uuid;
+alter table feedback            add column if not exists tenant_id uuid;
+
+-- ---------------------------------------------------------------------------
+-- Step 4: backfill every existing row (across every tenant-owned table) to
+-- the bootstrap tenant. Guarded by `where tenant_id is null` so this block
+-- is safe to run again later without re-touching already-assigned rows.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_tenant_id uuid;
+begin
+  select id into v_tenant_id from tenants where subdomain = 'tangerang-logistics';
+  if v_tenant_id is null then
+    raise exception 'Bootstrap tenant "tangerang-logistics" not found — Step 2 must run first';
+  end if;
+
+  update gps_devices        set tenant_id = v_tenant_id where tenant_id is null;
+  update vehicles            set tenant_id = v_tenant_id where tenant_id is null;
+  update geofences            set tenant_id = v_tenant_id where tenant_id is null;
+  update fleet_alerts         set tenant_id = v_tenant_id where tenant_id is null;
+  update maintenance_logs     set tenant_id = v_tenant_id where tenant_id is null;
+  update driver_performance   set tenant_id = v_tenant_id where tenant_id is null;
+  update inventory_items      set tenant_id = v_tenant_id where tenant_id is null;
+  update inventory_movements  set tenant_id = v_tenant_id where tenant_id is null;
+  update location_history     set tenant_id = v_tenant_id where tenant_id is null;
+  update app_users            set tenant_id = v_tenant_id where tenant_id is null;
+  update feedback              set tenant_id = v_tenant_id where tenant_id is null;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Step 5 (verification, not a mutation — run by hand before trusting Step 6):
+--
+--   select 'gps_devices' t, count(*) from gps_devices where tenant_id is null
+--   union all select 'vehicles', count(*) from vehicles where tenant_id is null
+--   union all select 'geofences', count(*) from geofences where tenant_id is null
+--   union all select 'fleet_alerts', count(*) from fleet_alerts where tenant_id is null
+--   union all select 'maintenance_logs', count(*) from maintenance_logs where tenant_id is null
+--   union all select 'driver_performance', count(*) from driver_performance where tenant_id is null
+--   union all select 'inventory_items', count(*) from inventory_items where tenant_id is null
+--   union all select 'inventory_movements', count(*) from inventory_movements where tenant_id is null
+--   union all select 'location_history', count(*) from location_history where tenant_id is null
+--   union all select 'app_users', count(*) from app_users where tenant_id is null
+--   union all select 'feedback', count(*) from feedback where tenant_id is null;
+--
+-- Every row must read 0 before Step 6 runs, or the NOT NULL constraints below
+-- will fail loudly (which is the safe direction — better a failed migration
+-- than a silently-unscoped row).
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- Step 6: lock tenant_id down now that every row has one.
+-- ---------------------------------------------------------------------------
+alter table gps_devices         alter column tenant_id set not null;
+alter table vehicles            alter column tenant_id set not null;
+alter table geofences           alter column tenant_id set not null;
+alter table fleet_alerts        alter column tenant_id set not null;
+alter table maintenance_logs    alter column tenant_id set not null;
+alter table driver_performance  alter column tenant_id set not null;
+alter table inventory_items     alter column tenant_id set not null;
+alter table inventory_movements alter column tenant_id set not null;
+alter table location_history    alter column tenant_id set not null;
+alter table app_users           alter column tenant_id set not null;
+alter table feedback            alter column tenant_id set not null;
+
+-- ---------------------------------------------------------------------------
+-- Step 7: foreign keys. ON DELETE RESTRICT on purpose — a tenant with any
+-- data left should never be hard-deletable by accident; the platform-admin
+-- "disable a tenant" lifecycle is a status flip (see tenants.status), not a
+-- DELETE, so this should never actually fire in normal operation.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'gps_devices_tenant_id_fkey') then
+    alter table gps_devices add constraint gps_devices_tenant_id_fkey
+      foreign key (tenant_id) references tenants(id) on delete restrict;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'vehicles_tenant_id_fkey') then
+    alter table vehicles add constraint vehicles_tenant_id_fkey
+      foreign key (tenant_id) references tenants(id) on delete restrict;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'geofences_tenant_id_fkey') then
+    alter table geofences add constraint geofences_tenant_id_fkey
+      foreign key (tenant_id) references tenants(id) on delete restrict;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'fleet_alerts_tenant_id_fkey') then
+    alter table fleet_alerts add constraint fleet_alerts_tenant_id_fkey
+      foreign key (tenant_id) references tenants(id) on delete restrict;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'maintenance_logs_tenant_id_fkey') then
+    alter table maintenance_logs add constraint maintenance_logs_tenant_id_fkey
+      foreign key (tenant_id) references tenants(id) on delete restrict;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'driver_performance_tenant_id_fkey') then
+    alter table driver_performance add constraint driver_performance_tenant_id_fkey
+      foreign key (tenant_id) references tenants(id) on delete restrict;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'inventory_items_tenant_id_fkey') then
+    alter table inventory_items add constraint inventory_items_tenant_id_fkey
+      foreign key (tenant_id) references tenants(id) on delete restrict;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'inventory_movements_tenant_id_fkey') then
+    alter table inventory_movements add constraint inventory_movements_tenant_id_fkey
+      foreign key (tenant_id) references tenants(id) on delete restrict;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'location_history_tenant_id_fkey') then
+    alter table location_history add constraint location_history_tenant_id_fkey
+      foreign key (tenant_id) references tenants(id) on delete restrict;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'app_users_tenant_id_fkey') then
+    alter table app_users add constraint app_users_tenant_id_fkey
+      foreign key (tenant_id) references tenants(id) on delete restrict;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'feedback_tenant_id_fkey') then
+    alter table feedback add constraint feedback_tenant_id_fkey
+      foreign key (tenant_id) references tenants(id) on delete restrict;
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Step 8a: tenant_id indexes — every tenant-scoped query from here on filters
+-- on this column, so it needs to be indexed on every table that has it.
+-- ---------------------------------------------------------------------------
+create index if not exists gps_devices_tenant_id_idx        on gps_devices (tenant_id);
+create index if not exists vehicles_tenant_id_idx            on vehicles (tenant_id);
+create index if not exists geofences_tenant_id_idx           on geofences (tenant_id);
+create index if not exists fleet_alerts_tenant_id_idx        on fleet_alerts (tenant_id);
+create index if not exists maintenance_logs_tenant_id_idx    on maintenance_logs (tenant_id);
+create index if not exists driver_performance_tenant_id_idx  on driver_performance (tenant_id);
+create index if not exists inventory_items_tenant_id_idx     on inventory_items (tenant_id);
+create index if not exists inventory_movements_tenant_id_idx on inventory_movements (tenant_id);
+create index if not exists location_history_tenant_id_idx    on location_history (tenant_id);
+create index if not exists app_users_tenant_id_idx           on app_users (tenant_id);
+create index if not exists feedback_tenant_id_idx            on feedback (tenant_id);
+
+-- ---------------------------------------------------------------------------
+-- Step 8b: composite (tenant_id, id) uniqueness — only where the primary key
+-- is a human-assigned text id, so two tenants will eventually be able to each
+-- have their own "V-101". This does NOT relax the existing plain `id` primary
+-- key (still globally unique for now, by design — see the accompanying
+-- report for why dropping that is a separate, later migration). Tables with
+-- a uuid primary key (fleet_alerts, driver_performance, inventory_movements,
+-- location_history, feedback) don't need this — a uuid can't collide.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'gps_devices_tenant_id_id_key') then
+    alter table gps_devices add constraint gps_devices_tenant_id_id_key unique (tenant_id, id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'vehicles_tenant_id_id_key') then
+    alter table vehicles add constraint vehicles_tenant_id_id_key unique (tenant_id, id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'geofences_tenant_id_id_key') then
+    alter table geofences add constraint geofences_tenant_id_id_key unique (tenant_id, id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'maintenance_logs_tenant_id_id_key') then
+    alter table maintenance_logs add constraint maintenance_logs_tenant_id_id_key unique (tenant_id, id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'inventory_items_tenant_id_id_key') then
+    alter table inventory_items add constraint inventory_items_tenant_id_id_key unique (tenant_id, id);
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Step 9: tenant-aware RLS.
+--
+-- app_current_tenant_id() resolves the caller's tenant from auth.uid() (the
+-- verified `sub` claim Supabase already puts in every JWT) by looking it up
+-- in app_users — no custom JWT claims, no Auth Hook configuration, nothing
+-- beyond plain SQL. It's SECURITY DEFINER so it can read app_users even
+-- though app_users itself has no public RLS policy (unchanged, still
+-- service-role-only): the function runs as its owner (the table owner,
+-- which already bypasses app_users' RLS by default — that's what
+-- SECURITY DEFINER buys here, not a separate privilege escalation).
+--
+-- Hardening applied:
+--   - `set search_path = public` PLUS explicit `public.` qualification on
+--     every object reference inside the body — belt-and-suspenders against
+--     search-path hijacking. Neither alone is as clear to a future reader
+--     as both together.
+--   - The function body is fixed, non-parameterized SQL (no string
+--     concatenation, no dynamic SQL) — its elevated privilege can only ever
+--     perform this one exact lookup, nothing an attacker can redirect.
+--   - EXECUTE is explicitly revoked from `public` and `anon` before being
+--     granted to `authenticated`, so unauthenticated/anonymous callers can
+--     never invoke it at all — not even to get the (harmless, always-NULL)
+--     result an anon caller would otherwise get. Postgres grants EXECUTE to
+--     PUBLIC by default on every new function, so the revoke is necessary,
+--     not redundant.
+--   - `authenticated` must be able to execute it: RLS policies are
+--     evaluated as the querying role, and every tenant-owned table's
+--     policies call this function — without EXECUTE, every query against
+--     those tables would fail with "permission denied for function".
+--   - If a user has no app_users row yet (e.g. an auth.users account mid
+--     provisioning), the lookup returns NULL; `tenant_id = NULL` is NULL,
+--     which Postgres RLS treats as false — the user sees nothing, which is
+--     the correct fail-closed behavior, not an error.
+-- ---------------------------------------------------------------------------
+create or replace function public.app_current_tenant_id()
+returns uuid
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select tenant_id from public.app_users where id = auth.uid();
+$$;
+
+revoke execute on function public.app_current_tenant_id() from public;
+revoke execute on function public.app_current_tenant_id() from anon;
+grant execute on function public.app_current_tenant_id() to authenticated;
+
+-- Every tenant-owned operational table gets all four command policies
+-- (select/insert/update/delete), all enforcing the same predicate. This
+-- replaces the old `public_read_*` policies (`using (true)`) entirely —
+-- there is no more unscoped read access to any of these tables.
+--
+-- app_users, feedback, and changelog are NOT in this list — their access
+-- model is unchanged (service-role-only for app_users/feedback; changelog
+-- has never had RLS restrictions since it's platform-wide, not tenant data).
+-- platform_admins does not exist yet (a later phase) and will follow the
+-- same service-role-only posture as app_users when it's introduced.
 do $$
 declare
   t text;
@@ -234,7 +506,29 @@ begin
     'driver_performance','inventory_items','inventory_movements','location_history'
   ])
   loop
+    -- Drop the old wide-open policy and any prior version of the policies
+    -- below, so this whole block is safe to re-run.
     execute format('drop policy if exists %I on %I;', 'public_read_' || t, t);
-    execute format('create policy %I on %I for select using (true);', 'public_read_' || t, t);
+    execute format('drop policy if exists %I on %I;', 'tenant_isolation_select_' || t, t);
+    execute format('drop policy if exists %I on %I;', 'tenant_isolation_insert_' || t, t);
+    execute format('drop policy if exists %I on %I;', 'tenant_isolation_update_' || t, t);
+    execute format('drop policy if exists %I on %I;', 'tenant_isolation_delete_' || t, t);
+
+    execute format(
+      'create policy %I on %I for select using (tenant_id = public.app_current_tenant_id());',
+      'tenant_isolation_select_' || t, t
+    );
+    execute format(
+      'create policy %I on %I for insert with check (tenant_id = public.app_current_tenant_id());',
+      'tenant_isolation_insert_' || t, t
+    );
+    execute format(
+      'create policy %I on %I for update using (tenant_id = public.app_current_tenant_id()) with check (tenant_id = public.app_current_tenant_id());',
+      'tenant_isolation_update_' || t, t
+    );
+    execute format(
+      'create policy %I on %I for delete using (tenant_id = public.app_current_tenant_id());',
+      'tenant_isolation_delete_' || t, t
+    );
   end loop;
 end $$;
