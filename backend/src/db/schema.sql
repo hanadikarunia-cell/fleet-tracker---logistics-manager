@@ -532,3 +532,140 @@ begin
     );
   end loop;
 end $$;
+
+-- =========================================================================
+-- DEVICE AUTHENTICATION — per-device credential for /api/positions.
+-- =========================================================================
+-- A device (GPS-101, a physical tracker, etc.) currently authenticates to
+-- POST /api/positions with nothing but its own device_id — a non-secret,
+-- human-readable string already visible to any logged-in user of its own
+-- tenant. This table plus the two functions below let the backend require
+-- proof of possession of a per-device secret before accepting a position.
+--
+-- device_id is both the primary key AND the foreign key to gps_devices, so
+-- there is structurally at most one credential row per device — Postgres's
+-- own PK uniqueness constraint is what prevents "multiple active
+-- credentials for one device" under concurrent registration/rotation, not
+-- application logic. Rotation and revocation are therefore both single-row
+-- UPDATEs on this one row — already atomic as single SQL statements, no
+-- wrapping transaction needed for either.
+--
+-- token_hash stores only sha256(plaintext token) — the plaintext is never
+-- persisted, logged, or returned except once, at issuance/rotation time, by
+-- the backend route handler (not by anything in this schema file).
+--
+-- ON DELETE CASCADE from gps_devices matches this schema's existing
+-- convention for tightly-owned child rows (fleet_alerts, location_history,
+-- etc. already cascade from vehicles) and is the deliberate choice here:
+-- once a device is deleted, its credential can never authenticate anything
+-- again anyway (the device row it would resolve to is gone), so leaving an
+-- orphaned row behind would serve no purpose and is exactly the "orphaned
+-- credential" condition worth avoiding outright.
+create table if not exists device_credentials (
+  device_id text primary key references gps_devices(id) on delete cascade,
+  tenant_id uuid not null references tenants(id) on delete restrict,
+  token_hash text not null unique,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz,
+  revoked_at timestamptz
+);
+
+create index if not exists device_credentials_tenant_id_idx on device_credentials (tenant_id);
+
+alter table device_credentials enable row level security;
+-- No policy at all — service-role-only, same posture as app_users/feedback.
+-- This table is never read or written through the anon/authenticated
+-- PostgREST surface; only the backend's service-role connection (and the
+-- two SECURITY DEFINER functions below, which run as their owner
+-- regardless of the caller's role) ever touch it.
+
+-- ---------------------------------------------------------------------------
+-- create_device_with_credential: atomic "insert device row + insert its
+-- first credential row" in one Postgres function body. This is the one
+-- place in this feature that genuinely needs multi-table atomicity — the
+-- backend's Supabase client only ever issues one REST call per statement,
+-- so two separate .insert() calls from application code would NOT be
+-- atomic (a device could be committed with no credential, or a credential
+-- could reference a device that failed to insert). Wrapping both inserts in
+-- one PL/pgSQL function body gives them Postgres's own implicit
+-- single-transaction guarantee: if either insert raises, the whole
+-- function's effects roll back together, including the first insert.
+-- ---------------------------------------------------------------------------
+create or replace function public.create_device_with_credential(
+  p_id text,
+  p_name text,
+  p_imei text,
+  p_assigned_vehicle_id text,
+  p_tenant_id uuid,
+  p_token_hash text
+)
+returns table (
+  id text, name text, imei text, status text, battery_level numeric,
+  signal_strength text, assigned_vehicle_id text, last_ping timestamptz, tenant_id uuid
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.gps_devices (id, name, imei, assigned_vehicle_id, tenant_id)
+  values (p_id, p_name, p_imei, p_assigned_vehicle_id, p_tenant_id);
+
+  insert into public.device_credentials (device_id, tenant_id, token_hash)
+  values (p_id, p_tenant_id, p_token_hash);
+
+  return query
+    select gd.id, gd.name, gd.imei, gd.status, gd.battery_level, gd.signal_strength,
+           gd.assigned_vehicle_id, gd.last_ping, gd.tenant_id
+    from public.gps_devices gd
+    where gd.id = p_id;
+end;
+$$;
+
+revoke execute on function public.create_device_with_credential(text, text, text, text, uuid, text) from public;
+revoke execute on function public.create_device_with_credential(text, text, text, text, uuid, text) from anon;
+revoke execute on function public.create_device_with_credential(text, text, text, text, uuid, text) from authenticated;
+grant execute on function public.create_device_with_credential(text, text, text, text, uuid, text) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- validate_device_credential: the entire authentication decision for
+-- POST /api/positions in one atomic statement. A single UPDATE ... FROM
+-- ... WHERE ... RETURNING both (a) proves the presented token hashes to the
+-- credential on file for exactly the claimed device_id, not revoked, with a
+-- consistent tenant on both sides, AND (b) advances last_used_at, in the
+-- same atomic operation — there is no gap between "checked the credential
+-- was valid" and "recorded that it was used" for a concurrent revocation to
+-- land in. GREATEST(dc.last_used_at, now()) is what makes concurrent
+-- successful pings monotonic: whichever commits, the stored value can only
+-- move forward, never backward, regardless of request arrival order.
+--
+-- Returns zero rows for EVERY failure case alike (unknown device_id, wrong
+-- token, revoked, device_id/token mismatch, tenant inconsistency between
+-- the two tables) — deliberately indistinguishable from the caller's
+-- perspective, so the route handler can return one generic 401 without
+-- creating a device-existence oracle.
+-- ---------------------------------------------------------------------------
+create or replace function public.validate_device_credential(p_device_id text, p_token_hash text)
+returns table (assigned_vehicle_id text, tenant_id uuid)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+    update public.device_credentials dc
+    set last_used_at = greatest(dc.last_used_at, now())
+    from public.gps_devices gd
+    where dc.device_id = p_device_id
+      and dc.token_hash = p_token_hash
+      and dc.revoked_at is null
+      and gd.id = dc.device_id
+      and gd.tenant_id = dc.tenant_id
+    returning gd.assigned_vehicle_id, dc.tenant_id;
+end;
+$$;
+
+revoke execute on function public.validate_device_credential(text, text) from public;
+revoke execute on function public.validate_device_credential(text, text) from anon;
+revoke execute on function public.validate_device_credential(text, text) from authenticated;
+grant execute on function public.validate_device_credential(text, text) to service_role;

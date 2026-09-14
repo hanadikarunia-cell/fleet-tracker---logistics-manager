@@ -2,6 +2,7 @@
 // (Step 5 of the setup): open /track.html on your phone, hit Start Tracking, and it
 // reports as device GPS-101 -> vehicle V-101. Safe to re-run (upserts).
 import dotenv from 'dotenv';
+import crypto from 'node:crypto';
 import { supabase } from '../supabaseClient.js';
 
 dotenv.config();
@@ -58,7 +59,24 @@ async function main() {
     .eq('id', 'GPS-101');
   if (deviceError) throw deviceError;
 
+  // /api/positions now requires a per-device credential (device authentication
+  // phase) — without one, this seeded device could never actually post a
+  // position. Provision one here so the walkthrough keeps working; this is a
+  // fresh random token generated locally, printed once for the developer
+  // running this script, never a hardcoded or production secret.
+  const token = crypto.randomBytes(32).toString('base64url');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const { error: credentialError } = await supabase.from('device_credentials').upsert({
+    device_id: 'GPS-101',
+    tenant_id: tenant.id,
+    token_hash: tokenHash,
+    created_at: new Date().toISOString(),
+    revoked_at: null,
+  });
+  if (credentialError) throw credentialError;
+
   console.log('Seeded V-101 / GPS-101 for the phone-as-GPS-device walkthrough.');
+  console.log(`Device token for GPS-101 (enter this on /track.html — shown only this once): ${token}`);
   console.log('Run `npm run bootstrap-admin -- <email> <password> <name>` to create the first real login.');
 }
 

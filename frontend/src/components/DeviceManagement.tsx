@@ -3,16 +3,18 @@ import { GPSDevice, Vehicle } from '../types';
 import { useLanguage } from '../i18n';
 import {
   Cpu, Plus, Edit, Trash2, CheckCircle, AlertTriangle,
-  Battery, Wifi, Eye, RefreshCw, Radio, ShieldCheck
+  Battery, Wifi, Eye, RefreshCw, Radio, ShieldCheck, KeyRound, Ban, X
 } from 'lucide-react';
 
 interface DeviceManagementProps {
   devices: GPSDevice[];
   vehicles: Vehicle[];
   userRole?: string;
-  onAddDevice: (device: GPSDevice) => void;
+  onAddDevice: (device: GPSDevice) => Promise<{ token: string } | undefined>;
   onEditDevice: (id: string, updated: Partial<GPSDevice>) => void;
   onDeleteDevice: (id: string) => void;
+  onRotateDeviceToken: (id: string) => Promise<{ token: string }>;
+  onRevokeDeviceToken: (id: string) => Promise<void>;
 }
 
 export default function DeviceManagement({
@@ -22,10 +24,15 @@ export default function DeviceManagement({
   onAddDevice,
   onEditDevice,
   onDeleteDevice,
+  onRotateDeviceToken,
+  onRevokeDeviceToken,
 }: DeviceManagementProps) {
   const { t } = useLanguage();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  // Shown exactly once, right after registration or a rotation — never re-fetchable.
+  const [revealedToken, setRevealedToken] = useState<{ deviceId: string; token: string } | null>(null);
+  const [tokenActionError, setTokenActionError] = useState<string | null>(null);
 
   // Form states
   const [formId, setFormId] = useState('');
@@ -36,7 +43,7 @@ export default function DeviceManagement({
   const [formSignal, setFormSignal] = useState<'excellent' | 'good' | 'fair' | 'poor'>('excellent');
   const [formVehicleId, setFormVehicleId] = useState('');
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!formId || !formName || !formImei) return;
 
@@ -60,10 +67,32 @@ export default function DeviceManagement({
         alert(t('dm.idExistsAlert'));
         return;
       }
-      onAddDevice(devicePayload);
+      const result = await onAddDevice(devicePayload);
+      if (result?.token) {
+        setRevealedToken({ deviceId: formId, token: result.token });
+      }
     }
 
     resetForm();
+  };
+
+  const handleRotate = async (deviceId: string) => {
+    setTokenActionError(null);
+    try {
+      const { token } = await onRotateDeviceToken(deviceId);
+      setRevealedToken({ deviceId, token });
+    } catch (err) {
+      setTokenActionError(err instanceof Error ? err.message : t('dm.tokenActionFailed'));
+    }
+  };
+
+  const handleRevoke = async (deviceId: string) => {
+    setTokenActionError(null);
+    try {
+      await onRevokeDeviceToken(deviceId);
+    } catch (err) {
+      setTokenActionError(err instanceof Error ? err.message : t('dm.tokenActionFailed'));
+    }
   };
 
   const startEdit = (device: GPSDevice) => {
@@ -377,6 +406,22 @@ export default function DeviceManagement({
                       <Edit className="w-3 h-3" /> {t('dm.config')}
                     </button>
                     <button
+                      id={`btn-rotate-token-${device.id}`}
+                      onClick={() => handleRotate(device.id)}
+                      className="p-1.5 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg transition cursor-pointer"
+                      title={t('dm.rotateToken')}
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      id={`btn-revoke-token-${device.id}`}
+                      onClick={() => { if (confirm(t('dm.revokeTokenConfirm'))) handleRevoke(device.id); }}
+                      className="p-1.5 hover:bg-amber-50 text-slate-400 hover:text-amber-600 rounded-lg transition cursor-pointer"
+                      title={t('dm.revokeToken')}
+                    >
+                      <Ban className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       id={`btn-delete-device-${device.id}`}
                       onClick={() => onDeleteDevice(device.id)}
                       className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
@@ -395,6 +440,56 @@ export default function DeviceManagement({
           );
         })}
       </div>
+
+      {tokenActionError && (
+        <div className="fixed bottom-5 right-5 bg-rose-600 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 z-50">
+          <AlertTriangle className="w-4 h-4 shrink-0" /> {tokenActionError}
+          <button onClick={() => setTokenActionError(null)} className="ml-2 cursor-pointer">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* REVEAL-ONCE DEVICE TOKEN MODAL */}
+      {revealedToken && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" id="modal-reveal-token">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-slate-100">
+            <div className="flex gap-3 text-slate-800">
+              <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl h-fit shrink-0">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900">{t('dm.tokenRevealTitle')}</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">{t('dm.tokenRevealDesc').replace('{deviceId}', revealedToken.deviceId)}</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <input
+                id="revealed-device-token"
+                readOnly
+                value={revealedToken.token}
+                onFocus={(e) => e.target.select()}
+                className="w-full bg-transparent text-xs font-mono text-slate-800 outline-none select-all"
+              />
+            </div>
+
+            <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 font-semibold">
+              ⚠️ {t('dm.tokenRevealWarning')}
+            </p>
+
+            <div className="flex justify-end pt-2">
+              <button
+                id="btn-close-reveal-token"
+                onClick={() => setRevealedToken(null)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition cursor-pointer select-none"
+              >
+                {t('dm.tokenRevealDone')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

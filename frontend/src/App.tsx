@@ -655,12 +655,23 @@ export default function App() {
 
   // DEVICE OPERATIONS
   const handleAddDevice = async (newDev: GPSDevice) => {
-    const created = await api.devices.create(newDev);
+    const { token, ...created } = await api.devices.create(newDev);
     setDevices((prev) => [...prev, created]);
     if (created.assignedVehicleId) {
       const updatedVehicle = await api.vehicles.update(created.assignedVehicleId, { deviceId: created.id });
       setVehicles((prev) => prev.map((v) => (v.id === updatedVehicle.id ? updatedVehicle : v)));
     }
+    // Returned to the caller so the UI can show it exactly once — never persisted,
+    // never fetched again afterward.
+    return { token };
+  };
+
+  const handleRotateDeviceToken = async (id: string) => {
+    return api.devices.rotateToken(id);
+  };
+
+  const handleRevokeDeviceToken = async (id: string) => {
+    await api.devices.revokeToken(id);
   };
 
   const handleEditDevice = async (id: string, updatedFields: Partial<GPSDevice>) => {
@@ -1404,6 +1415,8 @@ export default function App() {
               onAddDevice={handleAddDevice}
               onEditDevice={handleEditDevice}
               onDeleteDevice={handleDeleteDevice}
+              onRotateDeviceToken={handleRotateDeviceToken}
+              onRevokeDeviceToken={handleRevokeDeviceToken}
             />
           )}
 

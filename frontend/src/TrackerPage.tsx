@@ -21,6 +21,7 @@ interface LogEntry {
 
 export default function TrackerPage() {
   const [deviceId, setDeviceId] = useState(() => localStorage.getItem('tracker_device_id') || 'GPS-101');
+  const [deviceToken, setDeviceToken] = useState(() => localStorage.getItem('tracker_device_token') || '');
   const [isTracking, setIsTracking] = useState(false);
   const [reading, setReading] = useState<LiveReading | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -35,6 +36,10 @@ export default function TrackerPage() {
     localStorage.setItem('tracker_device_id', deviceId);
   }, [deviceId]);
 
+  useEffect(() => {
+    localStorage.setItem('tracker_device_token', deviceToken);
+  }, [deviceToken]);
+
   const pushLog = (entry: LogEntry) => {
     setLog((prev) => [entry, ...prev].slice(0, 8));
   };
@@ -43,14 +48,17 @@ export default function TrackerPage() {
     const current = readingRef.current;
     if (!current) return;
     try {
-      await api.positions.report({
-        device_id: deviceId,
-        lat: current.lat,
-        lng: current.lng,
-        speed: current.speedKmh,
-        heading: current.heading,
-        timestamp: new Date(current.capturedAt).toISOString(),
-      });
+      await api.positions.report(
+        {
+          device_id: deviceId,
+          lat: current.lat,
+          lng: current.lng,
+          speed: current.speedKmh,
+          heading: current.heading,
+          timestamp: new Date(current.capturedAt).toISOString(),
+        },
+        deviceToken
+      );
       setPingCount((c) => c + 1);
       pushLog({ time: new Date().toLocaleTimeString(), ok: true, message: `Sent (${current.lat.toFixed(5)}, ${current.lng.toFixed(5)})` });
     } catch (err) {
@@ -121,6 +129,20 @@ export default function TrackerPage() {
           <p className="text-[10px] text-slate-500">
             Must match a device already registered under GPS Hardware Register in the dashboard (GPS-101 is
             pre-seeded and assigned to V-101).
+          </p>
+
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide pt-1">Device Token</label>
+          <input
+            type="password"
+            value={deviceToken}
+            onChange={(e) => setDeviceToken(e.target.value)}
+            disabled={isTracking}
+            placeholder="Paste the token shown once at registration"
+            className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-sm font-mono disabled:opacity-50"
+          />
+          <p className="text-[10px] text-slate-500">
+            Issued once when this device was registered (or its token last rotated) in GPS Hardware Register —
+            required for the device to authenticate; positions won't be accepted without it.
           </p>
         </div>
 

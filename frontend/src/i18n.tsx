@@ -218,6 +218,14 @@ const translations = {
   'dm.config': { en: 'Config', id: 'Konfigurasi' },
   'dm.unregister': { en: 'Unregister Hardware', id: 'Batalkan Registrasi Perangkat' },
   'dm.idExistsAlert': { en: 'Device Hardware ID already exists!', id: 'ID Perangkat sudah digunakan!' },
+  'dm.rotateToken': { en: 'Rotate Device Token', id: 'Ganti Token Perangkat' },
+  'dm.revokeToken': { en: 'Revoke Device Token', id: 'Cabut Token Perangkat' },
+  'dm.revokeTokenConfirm': { en: 'Revoke this device\'s token? It will immediately stop being able to send positions until a new token is issued.', id: 'Cabut token perangkat ini? Perangkat akan langsung berhenti dapat mengirim posisi sampai token baru diterbitkan.' },
+  'dm.tokenActionFailed': { en: 'That action failed. Please try again.', id: 'Aksi tersebut gagal. Silakan coba lagi.' },
+  'dm.tokenRevealTitle': { en: 'Device Token', id: 'Token Perangkat' },
+  'dm.tokenRevealDesc': { en: 'This is the authentication token for device {deviceId}. Enter it on that device\'s tracker page.', id: 'Ini adalah token autentikasi untuk perangkat {deviceId}. Masukkan token ini di halaman pelacak perangkat tersebut.' },
+  'dm.tokenRevealWarning': { en: 'This token will not be shown again. Copy it now and store it securely.', id: 'Token ini tidak akan ditampilkan lagi. Salin sekarang dan simpan dengan aman.' },
+  'dm.tokenRevealDone': { en: "I've saved it", id: 'Sudah saya simpan' },
 
   // Fleet Directory (VehicleManagement)
   'vm.readOnlyAlert': { en: 'READ-ONLY AUDITOR MODE: You are signed in as a Viewer. Logistics fleet registrations, statuses, and device pairings are locked from modifications.', id: 'MODE AUDITOR HANYA-LIHAT: Anda masuk sebagai Viewer. Registrasi armada, status, dan pemasangan perangkat terkunci dari perubahan.' },

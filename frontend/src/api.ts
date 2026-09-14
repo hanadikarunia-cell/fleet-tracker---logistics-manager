@@ -34,6 +34,16 @@ async function requestForm<T>(path: string, formData: FormData, method = 'POST')
   return handleResponse<T>(res, path);
 }
 
+// Device-authenticated requests (e.g. position ingest) carry no user session — the
+// tracker page never signs in — so this deliberately does not go through
+// authHeaders(); it sends the device's own bearer token instead, when supplied.
+async function postDevice<T>(path: string, body: unknown, deviceToken?: string): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (deviceToken) headers.Authorization = `Bearer ${deviceToken}`;
+  const res = await fetch(`${API_URL}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  return handleResponse<T>(res, path);
+}
+
 const get = <T>(path: string) => request<T>(path);
 const post = <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) });
 const put = <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) });
@@ -49,9 +59,12 @@ export const api = {
   },
   devices: {
     list: () => get<GPSDevice[]>('/api/devices'),
-    create: (d: GPSDevice) => post<GPSDevice>('/api/devices', d),
+    // The token is returned once, at registration — never again afterward.
+    create: (d: GPSDevice) => post<GPSDevice & { token: string }>('/api/devices', d),
     update: (id: string, d: Partial<GPSDevice>) => put<GPSDevice>(`/api/devices/${id}`, d),
     remove: (id: string) => del(`/api/devices/${id}`),
+    rotateToken: (id: string) => post<{ token: string }>(`/api/devices/${id}/rotate-token`, {}),
+    revokeToken: (id: string) => post<void>(`/api/devices/${id}/revoke-token`, {}),
   },
   geofences: {
     list: () => get<Geofence[]>('/api/geofences'),
@@ -116,7 +129,9 @@ export const api = {
     remove: (id: string) => del(`/api/changelog/${id}`),
   },
   positions: {
-    report: (p: { device_id: string; lat: number; lng: number; speed?: number; heading?: number; timestamp?: string }) =>
-      post<{ vehicle: Vehicle; alerts: FleetAlert[] }>('/api/positions', p),
+    report: (
+      p: { device_id: string; lat: number; lng: number; speed?: number; heading?: number; timestamp?: string },
+      deviceToken?: string
+    ) => postDevice<{ vehicle: Vehicle; alerts: FleetAlert[] }>('/api/positions', p, deviceToken),
   },
 };
