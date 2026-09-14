@@ -9,13 +9,22 @@ const writeRoles = ['admin', 'manager'];
 vehiclesRouter.use(requireAuth);
 
 vehiclesRouter.get('/', async (req, res) => {
-  const { data, error } = await supabase.from('vehicles').select('*').order('name', { ascending: true });
+  const { data, error } = await supabase
+    .from('vehicles')
+    .select('*')
+    .eq('tenant_id', req.tenantId)
+    .order('name', { ascending: true });
   if (error) return res.status(500).json({ error: error.message });
   res.json(mapVehicleRows(data ?? []));
 });
 
 vehiclesRouter.get('/:id', async (req, res) => {
-  const { data, error } = await supabase.from('vehicles').select('*').eq('id', req.params.id).maybeSingle();
+  const { data, error } = await supabase
+    .from('vehicles')
+    .select('*')
+    .eq('id', req.params.id)
+    .eq('tenant_id', req.tenantId)
+    .maybeSingle();
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Not found' });
   res.json(mapVehicleRow(data));
@@ -27,6 +36,7 @@ vehiclesRouter.get('/:id/history', async (req, res) => {
     .from('location_history')
     .select('*')
     .eq('vehicle_id', req.params.id)
+    .eq('tenant_id', req.tenantId)
     .order('timestamp', { ascending: true });
 
   if (typeof from === 'string') query = query.gte('timestamp', from);
@@ -57,15 +67,30 @@ vehiclesRouter.post('/', requireRole(writeRoles), async (req, res) => {
 });
 
 vehiclesRouter.put('/:id', requireRole(writeRoles), async (req, res) => {
-  const row = toSnakeRow(req.body);
-  const { data, error } = await supabase.from('vehicles').update(row).eq('id', req.params.id).select().maybeSingle();
+  // Never let a client move a vehicle to another tenant.
+  const { tenant_id: _ignoredSnake, tenantId: _ignoredCamel, ...body } = req.body ?? {};
+  const row = toSnakeRow(body);
+  const { data, error } = await supabase
+    .from('vehicles')
+    .update(row)
+    .eq('id', req.params.id)
+    .eq('tenant_id', req.tenantId)
+    .select()
+    .maybeSingle();
   if (error) return res.status(400).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Not found' });
   res.json(mapVehicleRow(data));
 });
 
 vehiclesRouter.delete('/:id', requireRole(writeRoles), async (req, res) => {
-  const { error } = await supabase.from('vehicles').delete().eq('id', req.params.id);
+  const { data, error } = await supabase
+    .from('vehicles')
+    .delete()
+    .eq('id', req.params.id)
+    .eq('tenant_id', req.tenantId)
+    .select()
+    .maybeSingle();
   if (error) return res.status(400).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: 'Not found' });
   res.status(204).send();
 });

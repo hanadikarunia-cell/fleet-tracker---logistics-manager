@@ -79,8 +79,14 @@ positionsRouter.post('/', async (req, res) => {
   // 3. Keep the device fresh.
   await supabase.from('gps_devices').update({ last_ping: timestamp, status: 'online' }).eq('id', device_id);
 
-  // 4. Geofence enter/exit check against active fences.
-  const { data: fences } = await supabase.from('geofences').select('*').eq('active', true);
+  // 4. Geofence enter/exit check against this device's own tenant's active fences only —
+  // otherwise a transition could be evaluated against (and leak the name of) another
+  // tenant's geofence.
+  const { data: fences } = await supabase
+    .from('geofences')
+    .select('*')
+    .eq('active', true)
+    .eq('tenant_id', device.tenant_id);
   const newAlerts: any[] = [];
 
   for (const fence of (fences ?? []) as GeofenceRow[]) {

@@ -9,8 +9,12 @@ export const usersRouter = Router();
 // operational fleet data. Even listing operators requires admin.
 usersRouter.use(requireAuth, requireRole(['admin']));
 
-usersRouter.get('/', async (_req, res) => {
-  const { data, error } = await supabase.from('app_users').select('*').order('created_at', { ascending: true });
+usersRouter.get('/', async (req, res) => {
+  const { data, error } = await supabase
+    .from('app_users')
+    .select('*')
+    .eq('tenant_id', req.tenantId)
+    .order('created_at', { ascending: true });
   if (error) return res.status(500).json({ error: error.message });
   res.json(toCamelList(data ?? []));
 });
@@ -49,13 +53,21 @@ usersRouter.post('/', async (req, res) => {
 });
 
 usersRouter.put('/:id', async (req, res) => {
+  // name/role/department only — tenant_id is never accepted from the body, and the
+  // update itself is scoped to the caller's own tenant so it can't reach another one.
   const { name, role, department } = req.body as { name?: string; role?: string; department?: string };
   const patch: Record<string, unknown> = {};
   if (name !== undefined) patch.name = name;
   if (role !== undefined) patch.role = role;
   if (department !== undefined) patch.department = department;
 
-  const { data, error } = await supabase.from('app_users').update(patch).eq('id', req.params.id).select().maybeSingle();
+  const { data, error } = await supabase
+    .from('app_users')
+    .update(patch)
+    .eq('id', req.params.id)
+    .eq('tenant_id', req.tenantId)
+    .select()
+    .maybeSingle();
   if (error) return res.status(400).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Not found' });
   res.json(toCamel(data));
@@ -65,10 +77,23 @@ usersRouter.delete('/:id', async (req, res) => {
   if (req.params.id === req.user!.id) {
     return res.status(400).json({ error: 'You cannot delete your own account' });
   }
+
+  // Verify the target belongs to the caller's own tenant BEFORE the destructive
+  // auth.admin.deleteUser call — that call has no tenant concept of its own, so the
+  // ownership check has to happen here, not as a query filter on it.
+  const { data: target, error: lookupError } = await supabase
+    .from('app_users')
+    .select('id')
+    .eq('id', req.params.id)
+    .eq('tenant_id', req.tenantId)
+    .maybeSingle();
+  if (lookupError) return res.status(500).json({ error: lookupError.message });
+  if (!target) return res.status(404).json({ error: 'Not found' });
+
   const { error: authError } = await supabase.auth.admin.deleteUser(req.params.id);
   if (authError) return res.status(400).json({ error: authError.message });
   // The app_users row cascade-deletes via its FK to auth.users, but clean up explicitly in
   // case the auth user was already gone.
-  await supabase.from('app_users').delete().eq('id', req.params.id);
+  await supabase.from('app_users').delete().eq('id', req.params.id).eq('tenant_id', req.tenantId);
   res.status(204).send();
 });

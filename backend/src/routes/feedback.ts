@@ -51,8 +51,12 @@ feedbackRouter.post('/', upload.single('image'), async (req, res) => {
 });
 
 // Reviewing feedback is admin-only.
-feedbackRouter.get('/', requireRole(['admin']), async (_req, res) => {
-  const { data, error } = await supabase.from('feedback').select('*').order('created_at', { ascending: false });
+feedbackRouter.get('/', requireRole(['admin']), async (req, res) => {
+  const { data, error } = await supabase
+    .from('feedback')
+    .select('*')
+    .eq('tenant_id', req.tenantId)
+    .order('created_at', { ascending: false });
   if (error) return res.status(500).json({ error: error.message });
   res.json(toCamelList(data ?? []));
 });
@@ -62,19 +66,34 @@ feedbackRouter.put('/:id', requireRole(['admin']), async (req, res) => {
   if (!status || !['new', 'reviewed', 'resolved'].includes(status)) {
     return res.status(400).json({ error: 'status must be one of: new, reviewed, resolved' });
   }
-  const { data, error } = await supabase.from('feedback').update({ status }).eq('id', req.params.id).select().maybeSingle();
+  const { data, error } = await supabase
+    .from('feedback')
+    .update({ status })
+    .eq('id', req.params.id)
+    .eq('tenant_id', req.tenantId)
+    .select()
+    .maybeSingle();
   if (error) return res.status(400).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Not found' });
   res.json(toCamel(data));
 });
 
 feedbackRouter.delete('/:id', requireRole(['admin']), async (req, res) => {
-  const { data: row } = await supabase.from('feedback').select('image_url').eq('id', req.params.id).maybeSingle();
-  if (row?.image_url) {
+  // Verify tenant ownership before any Storage cleanup or the row delete itself.
+  const { data: row, error: lookupError } = await supabase
+    .from('feedback')
+    .select('image_url')
+    .eq('id', req.params.id)
+    .eq('tenant_id', req.tenantId)
+    .maybeSingle();
+  if (lookupError) return res.status(500).json({ error: lookupError.message });
+  if (!row) return res.status(404).json({ error: 'Not found' });
+
+  if (row.image_url) {
     const path = row.image_url.split('/feedback-images/')[1];
     if (path) await supabase.storage.from('feedback-images').remove([path]);
   }
-  const { error } = await supabase.from('feedback').delete().eq('id', req.params.id);
+  const { error } = await supabase.from('feedback').delete().eq('id', req.params.id).eq('tenant_id', req.tenantId);
   if (error) return res.status(400).json({ error: error.message });
   res.status(204).send();
 });

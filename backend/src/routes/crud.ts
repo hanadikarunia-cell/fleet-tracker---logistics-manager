@@ -17,7 +17,7 @@ export function crudRouter(
   router.use(requireAuth);
 
   router.get('/', async (req, res) => {
-    let query = supabase.from(table).select('*');
+    let query = supabase.from(table).select('*').eq('tenant_id', req.tenantId);
     if (options?.orderBy) {
       query = query.order(options.orderBy, { ascending: options.ascending ?? false });
     }
@@ -27,7 +27,12 @@ export function crudRouter(
   });
 
   router.get('/:id', async (req, res) => {
-    const { data, error } = await supabase.from(table).select('*').eq('id', req.params.id).maybeSingle();
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('tenant_id', req.tenantId)
+      .maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Not found' });
     res.json(toCamel(data));
@@ -45,16 +50,32 @@ export function crudRouter(
   });
 
   router.put('/:id', requireRole(writeRoles), async (req, res) => {
-    const row = toSnakeRow(req.body);
-    const { data, error } = await supabase.from(table).update(row).eq('id', req.params.id).select().maybeSingle();
+    // Never let a client move a row to another tenant — strip any tenant_id/tenantId
+    // the body might carry, and scope the update itself to the caller's own tenant.
+    const { tenant_id: _ignoredSnake, tenantId: _ignoredCamel, ...body } = req.body ?? {};
+    const row = toSnakeRow(body);
+    const { data, error } = await supabase
+      .from(table)
+      .update(row)
+      .eq('id', req.params.id)
+      .eq('tenant_id', req.tenantId)
+      .select()
+      .maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Not found' });
     res.json(toCamel(data));
   });
 
   router.delete('/:id', requireRole(writeRoles), async (req, res) => {
-    const { error } = await supabase.from(table).delete().eq('id', req.params.id);
+    const { data, error } = await supabase
+      .from(table)
+      .delete()
+      .eq('id', req.params.id)
+      .eq('tenant_id', req.tenantId)
+      .select()
+      .maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: 'Not found' });
     res.status(204).send();
   });
 
