@@ -1,6 +1,7 @@
 import type {
   Vehicle, GPSDevice, Geofence, FleetAlert, MaintenanceLog,
   DriverPerformance, InventoryItem, InventoryMovement, LocationHistoryPoint, AppUser, Feedback, FeedbackStatus,
+  ChangelogEntry, ChangelogBumpType,
 } from './types';
 import { supabase } from './supabaseClient';
 
@@ -106,6 +107,13 @@ export const api = {
     },
     updateStatus: (id: string, status: FeedbackStatus) => put<Feedback>(`/api/feedback/${id}`, { status }),
     remove: (id: string) => del(`/api/feedback/${id}`),
+  },
+  changelog: {
+    list: () => get<ChangelogEntry[]>('/api/changelog'),
+    create: (c: { bumpType: ChangelogBumpType; title: string; changes: string[] }) =>
+      post<ChangelogEntry>('/api/changelog', c),
+    update: (id: string, c: { title?: string; changes?: string[] }) => put<ChangelogEntry>(`/api/changelog/${id}`, c),
+    remove: (id: string) => del(`/api/changelog/${id}`),
   },
   positions: {
     report: (p: { device_id: string; lat: number; lng: number; speed?: number; heading?: number; timestamp?: string }) =>

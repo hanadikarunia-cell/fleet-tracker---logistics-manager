@@ -38,6 +38,7 @@ const translations = {
   'nav.devices': { en: 'GPS Hardware Register', id: 'Registrasi Perangkat GPS' },
   'nav.users': { en: 'User & Role Center', id: 'Pusat Pengguna & Peran' },
   'nav.feedback': { en: 'User Feedback', id: 'Masukan Pengguna' },
+  'nav.whatsnew': { en: "What's New", id: 'Pembaruan Aplikasi' },
 
   'header.map.title': { en: 'Live GPS Navigation Tracking', id: 'Pelacakan Navigasi GPS Langsung' },
   'header.map.subtitle': { en: 'Track physical assets en-route across Greater Jakarta (Jabodetabek).', id: 'Lacak aset yang sedang dalam perjalanan di seluruh wilayah Jabodetabek.' },
@@ -61,6 +62,8 @@ const translations = {
   'header.users.subtitle': { en: 'Manage system operator accounts, operational roles, and security policies.', id: 'Kelola akun operator sistem, peran operasional, dan kebijakan keamanan.' },
   'header.feedback.title': { en: 'User Feedback Inbox', id: 'Kotak Masuk Masukan Pengguna' },
   'header.feedback.subtitle': { en: 'Bug reports and suggestions submitted from inside the app, with screenshots.', id: 'Laporan bug dan saran yang dikirim dari dalam aplikasi, lengkap dengan tangkapan layar.' },
+  'header.whatsnew.title': { en: "What's New", id: 'Pembaruan Aplikasi' },
+  'header.whatsnew.subtitle': { en: 'The current app version and a history of what changed in each release.', id: 'Versi aplikasi saat ini dan riwayat perubahan di setiap rilis.' },
 
   'sidebar.pingRate': { en: 'Telemetry Ping Rate', id: 'Frekuensi Ping Telemetri' },
   'sidebar.geofencesGuard': { en: 'Geofences Guard:', id: 'Penjaga Geofence:' },
@@ -264,6 +267,33 @@ const translations = {
   'vm.saveApplyRoute': { en: 'Save & Apply Route', id: 'Simpan & Terapkan Rute' },
   'vm.idExistsAlert': { en: 'Vehicle ID already registered!', id: 'ID Kendaraan sudah terdaftar!' },
   'vm.routeRequiredAlert': { en: 'Route title, origin, and destination are required.', id: 'Judul rute, asal, dan tujuan wajib diisi.' },
+
+  // What's New (app version + changelog)
+  'whatsnew.currentVersion': { en: 'Current Version', id: 'Versi Saat Ini' },
+  'whatsnew.publishUpdate': { en: 'Publish Update', id: 'Terbitkan Pembaruan' },
+  'whatsnew.publishTitle': { en: 'Publish a New Version', id: 'Terbitkan Versi Baru' },
+  'whatsnew.publishDesc': { en: 'This will bump the app version and show these notes to every user.', id: 'Ini akan menaikkan versi aplikasi dan menampilkan catatan ini ke semua pengguna.' },
+  'whatsnew.bumpType': { en: 'Update Type', id: 'Jenis Pembaruan' },
+  'whatsnew.bumpMajor': { en: 'Major — big changes, may affect how you work', id: 'Mayor — perubahan besar, dapat memengaruhi cara kerja Anda' },
+  'whatsnew.bumpMinor': { en: 'Minor — new features, safe to adopt', id: 'Minor — fitur baru, aman digunakan' },
+  'whatsnew.bumpPatch': { en: 'Patch — small fixes and tweaks', id: 'Patch — perbaikan dan penyesuaian kecil' },
+  'whatsnew.titleLabel': { en: 'Update Title', id: 'Judul Pembaruan' },
+  'whatsnew.titlePlaceholder': { en: 'e.g. Indonesian translations for Fleet Directory', id: 'cth. Terjemahan Bahasa Indonesia untuk Direktori Armada' },
+  'whatsnew.changesLabel': { en: 'What changed (one line per bullet)', id: 'Apa yang berubah (satu baris per poin)' },
+  'whatsnew.changesPlaceholder': { en: 'Fixed the weather radar showing stale data\nTranslated the GPS Hardware Register page', id: 'Memperbaiki radar cuaca yang menampilkan data usang\nMenerjemahkan halaman Registrasi Perangkat GPS' },
+  'whatsnew.publish': { en: 'Publish', id: 'Terbitkan' },
+  'whatsnew.publishing': { en: 'Publishing…', id: 'Menerbitkan…' },
+  'whatsnew.empty': { en: 'No updates published yet.', id: 'Belum ada pembaruan yang diterbitkan.' },
+  'whatsnew.majorBadge': { en: 'MAJOR', id: 'MAYOR' },
+  'whatsnew.minorBadge': { en: 'MINOR', id: 'MINOR' },
+  'whatsnew.patchBadge': { en: 'PATCH', id: 'PATCH' },
+  'whatsnew.publishedBy': { en: 'Published by', id: 'Diterbitkan oleh' },
+  'whatsnew.editEntry': { en: 'Edit update', id: 'Ubah pembaruan' },
+  'whatsnew.deleteEntry': { en: 'Delete update', id: 'Hapus pembaruan' },
+  'whatsnew.saveChanges': { en: 'Save Changes', id: 'Simpan Perubahan' },
+  'whatsnew.titleRequiredAlert': { en: 'Update title is required.', id: 'Judul pembaruan wajib diisi.' },
+  'whatsnew.changesRequiredAlert': { en: 'At least one change entry is required.', id: 'Minimal satu poin perubahan wajib diisi.' },
+  'whatsnew.newDot': { en: 'New', id: 'Baru' },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Vehicle, GPSDevice, Geofence, GeofenceAlert, FleetAlert,
   MaintenanceLog, DriverPerformance, InventoryItem,
-  LocationHistoryPoint, MapSettings, AppUser, UserRole, CustomRoute, Feedback, FeedbackStatus
+  LocationHistoryPoint, MapSettings, AppUser, UserRole, CustomRoute, Feedback, FeedbackStatus,
+  ChangelogEntry, ChangelogBumpType
 } from './types';
 import { api } from './api';
 import { supabase } from './supabaseClient';
@@ -16,6 +17,7 @@ import VehicleManagement from './components/VehicleManagement';
 import UserRoleManagement from './components/UserRoleManagement';
 import FeedbackModal from './components/FeedbackModal';
 import FeedbackView from './components/FeedbackView';
+import WhatsNewView from './components/WhatsNewView';
 import LanguageToggle from './components/LanguageToggle';
 import { useLanguage } from './i18n';
 import QuickAssetLocateBar from './components/common/QuickAssetLocateBar';
@@ -27,13 +29,13 @@ import type { Session } from '@supabase/supabase-js';
 import {
   Map, LayoutDashboard, Boxes, Users, Cpu, Truck,
   Plus, AlertOctagon, Info, Layers, Smartphone, Navigation, Fingerprint,
-  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare
+  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare, Sparkles
 } from 'lucide-react';
 
 export const ROLE_MODULES: Record<UserRole, string[]> = {
-  admin: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory', 'drivers', 'vehicles', 'devices', 'users', 'feedback'],
-  manager: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory', 'drivers', 'vehicles'],
-  viewer: ['map', 'dashboard', 'telemetry', 'eta', 'drivers'],
+  admin: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory', 'drivers', 'vehicles', 'devices', 'users', 'feedback', 'whatsnew'],
+  manager: ['map', 'dashboard', 'telemetry', 'eta', 'efficiency', 'inventory', 'drivers', 'vehicles', 'whatsnew'],
+  viewer: ['map', 'dashboard', 'telemetry', 'eta', 'drivers', 'whatsnew'],
 };
 
 export default function App() {
@@ -65,6 +67,8 @@ export default function App() {
 
   const [users, setUsers] = useState<AppUser[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [changelog, setChangelog] = useState<ChangelogEntry[]>([]);
+  const [lastSeenVersion, setLastSeenVersion] = useState<string | null>(() => localStorage.getItem('fleet_last_seen_version'));
 
   // --- AUTH: real Supabase login, not a demo persona switcher ---
   const [session, setSession] = useState<Session | null | undefined>(undefined); // undefined = not checked yet
@@ -120,7 +124,7 @@ export default function App() {
   }, [customRoutes]);
 
   // --- 2. INTERACTIVE UI STATES ---
-  const [activeTab, setActiveTab] = useState<'map' | 'dashboard' | 'telemetry' | 'eta' | 'efficiency' | 'inventory' | 'drivers' | 'devices' | 'vehicles' | 'users' | 'feedback'>('map');
+  const [activeTab, setActiveTab] = useState<'map' | 'dashboard' | 'telemetry' | 'eta' | 'efficiency' | 'inventory' | 'drivers' | 'devices' | 'vehicles' | 'users' | 'feedback' | 'whatsnew'>('map');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [historyPoints, setHistoryPoints] = useState<LocationHistoryPoint[] | null>(null);
   const [isPlayingHistory, setIsPlayingHistory] = useState(false);
@@ -241,6 +245,21 @@ export default function App() {
   useEffect(() => {
     if (activeTab === 'feedback') loadFeedback();
   }, [activeTab]);
+
+  // The changelog is visible to every role — fetch once a profile is resolved.
+  useEffect(() => {
+    if (!currentUser) return;
+    api.changelog.list().then(setChangelog).catch((err) => console.error('Failed to load changelog:', err));
+  }, [currentUser?.id]);
+
+  // Mark the latest version as "seen" (clears the sidebar's new-update dot) once the user
+  // actually opens the What's New tab.
+  useEffect(() => {
+    if (activeTab !== 'whatsnew' || changelog.length === 0) return;
+    const latest = changelog[0].version;
+    localStorage.setItem('fleet_last_seen_version', latest);
+    setLastSeenVersion(latest);
+  }, [activeTab, changelog]);
 
   // Live pushes: vehicle positions and new alerts stream in via Supabase Realtime
   // instead of polling. Writes still go through the backend API.
@@ -758,6 +777,22 @@ export default function App() {
     setFeedback((prev) => prev.filter((f) => f.id !== id));
   };
 
+  // --- WHAT'S NEW (app version + changelog, admin-authored, everyone can read) ---
+  const handlePublishChangelog = async (bumpType: ChangelogBumpType, title: string, changes: string[]) => {
+    const created = await api.changelog.create({ bumpType, title, changes });
+    setChangelog((prev) => [created, ...prev]);
+  };
+
+  const handleUpdateChangelogEntry = async (id: string, updated: { title: string; changes: string[] }) => {
+    const saved = await api.changelog.update(id, updated);
+    setChangelog((prev) => prev.map((c) => (c.id === id ? saved : c)));
+  };
+
+  const handleDeleteChangelogEntry = async (id: string) => {
+    await api.changelog.remove(id);
+    setChangelog((prev) => prev.filter((c) => c.id !== id));
+  };
+
   if (session === undefined) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-950 text-slate-400 text-sm font-semibold gap-2">
@@ -817,7 +852,19 @@ export default function App() {
               </div>
               <div>
                 <h1 className="font-extrabold text-sm tracking-wider">{t('brand.name')}</h1>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{t('brand.subtitle')}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{t('brand.subtitle')}</p>
+                  {changelog[0]?.version && (
+                    <button
+                      id="btn-version-tag"
+                      onClick={() => setActiveTab('whatsnew')}
+                      title={t('nav.whatsnew')}
+                      className="text-[9px] font-mono font-bold text-slate-500 hover:text-blue-400 transition"
+                    >
+                      v{changelog[0].version}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1017,6 +1064,25 @@ export default function App() {
               </button>
             )}
 
+            {ROLE_MODULES[currentUser.role].includes('whatsnew') && (
+              <button
+                id="tab-whatsnew"
+                onClick={() => setActiveTab('whatsnew')}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'whatsnew'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Sparkles className="w-4 h-4" /> {t('nav.whatsnew')}
+                </span>
+                {changelog.length > 0 && changelog[0].version !== lastSeenVersion && (
+                  <span className="bg-rose-500 w-2 h-2 rounded-full shrink-0" />
+                )}
+              </button>
+            )}
+
           </nav>
         </div>
 
@@ -1081,6 +1147,7 @@ export default function App() {
               {activeTab === 'devices' && t('header.devices.title')}
               {activeTab === 'users' && t('header.users.title')}
               {activeTab === 'feedback' && t('header.feedback.title')}
+              {activeTab === 'whatsnew' && t('header.whatsnew.title')}
             </h2>
             <p className="text-xs text-slate-500 font-semibold">
               {activeTab === 'map' && t('header.map.subtitle')}
@@ -1094,6 +1161,7 @@ export default function App() {
               {activeTab === 'devices' && t('header.devices.subtitle')}
               {activeTab === 'users' && t('header.users.subtitle')}
               {activeTab === 'feedback' && t('header.feedback.subtitle')}
+              {activeTab === 'whatsnew' && t('header.whatsnew.subtitle')}
             </p>
           </div>
 
@@ -1356,6 +1424,17 @@ export default function App() {
               feedback={feedback}
               onUpdateStatus={handleUpdateFeedbackStatus}
               onDelete={handleDeleteFeedback}
+            />
+          )}
+
+          {/* TAB 9: WHAT'S NEW (APP VERSION + CHANGELOG) */}
+          {activeTab === 'whatsnew' && (
+            <WhatsNewView
+              entries={changelog}
+              isAdmin={currentUser.role === 'admin'}
+              onPublish={handlePublishChangelog}
+              onUpdate={handleUpdateChangelogEntry}
+              onDelete={handleDeleteChangelogEntry}
             />
           )}
 

@@ -198,3 +198,15 @@ export interface Feedback {
   createdAt: string;
 }
 
+export type ChangelogBumpType = 'major' | 'minor' | 'patch';
+
+export interface ChangelogEntry {
+  id: string;
+  version: string;
+  bumpType: ChangelogBumpType;
+  title: string;
+  changes: string[];
+  createdBy: string | null;
+  createdAt: string;
+}
+

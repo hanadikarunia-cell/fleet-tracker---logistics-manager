@@ -68,6 +68,8 @@ See `backend/src/index.ts` for the full route list. Key endpoints:
 | CRUD | `/api/vehicles`, `/api/devices`, `/api/geofences`, `/api/alerts`, `/api/maintenance`, `/api/driver-performance`, `/api/inventory`, `/api/inventory-movements`, `/api/users` | Standard REST |
 | POST | `/api/feedback` | Submit feedback (multipart form: `message`, optional `image`) — any logged-in role |
 | GET/PUT/DELETE | `/api/feedback` | Review/triage feedback — admin only |
+| GET | `/api/changelog` | App version history ("What's New") — any logged-in role |
+| POST/PUT/DELETE | `/api/changelog` | Publish/edit/remove a version entry — admin only |
 
 ## 3. Run the frontend
 
@@ -141,6 +143,19 @@ see the **User Feedback** tab where it's reviewed (with a badge showing how
 many are still `new`); images are stored in a public Supabase Storage bucket
 (`feedback-images`) that only the backend, using the service-role key, ever
 writes to.
+
+## App version & What's New
+
+Every user sees the current app version (small `vX.Y.Z` tag next to the
+sidebar logo) and a **What's New** tab with the full release history. Only
+admins can publish a new entry, from a form in that tab: pick whether it's a
+**major**, **minor**, or **patch** update and write the title + a bullet list
+of what changed — the version number itself is computed automatically from
+the bump type and the previous version (`backend/src/routes/changelog.ts`),
+so nobody has to track or type the next semver by hand. Publishing is
+immediate and needs no redeploy. A small red dot appears on the sidebar's
+What's New tab for any user who hasn't opened it since the latest version
+was published (tracked per-browser in `localStorage`, not per-account).
 
 ## Language
 

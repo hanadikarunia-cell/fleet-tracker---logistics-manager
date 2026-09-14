@@ -188,6 +188,20 @@ create table if not exists feedback (
   created_at timestamptz not null default now()
 );
 
+-- App version history ("What's New"). Each row is one release: `version` is the resulting
+-- semver string, `bump_type` records whether it was a major/minor/patch step from the previous
+-- row, and `changes` holds the bullet list shown to users. The row with the latest created_at
+-- is the current app version.
+create table if not exists changelog (
+  id uuid primary key default gen_random_uuid(),
+  version text not null,
+  bump_type text not null check (bump_type in ('major', 'minor', 'patch')),
+  title text not null,
+  changes text[] not null default '{}',
+  created_by text,
+  created_at timestamptz not null default now()
+);
+
 -- Public bucket: the backend (service role) is the only writer, but reads happen directly
 -- against Supabase's public object URL — no need to proxy image bytes through our own API.
 insert into storage.buckets (id, name, public)
@@ -209,6 +223,7 @@ alter table inventory_movements enable row level security;
 alter table location_history enable row level security;
 alter table app_users enable row level security;
 alter table feedback enable row level security;
+alter table changelog enable row level security;
 
 do $$
 declare

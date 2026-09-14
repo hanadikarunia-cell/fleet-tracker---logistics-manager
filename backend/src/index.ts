@@ -7,6 +7,7 @@ import { crudRouter } from './routes/crud.js';
 import { usersRouter } from './routes/users.js';
 import { authRouter } from './routes/auth.js';
 import { feedbackRouter } from './routes/feedback.js';
+import { changelogRouter } from './routes/changelog.js';
 
 dotenv.config();
 
@@ -40,6 +41,7 @@ app.use('/api/inventory', crudRouter('inventory_items'));
 app.use('/api/inventory-movements', crudRouter('inventory_movements', { orderBy: 'timestamp' }));
 app.use('/api/users', usersRouter);
 app.use('/api/feedback', feedbackRouter);
+app.use('/api/changelog', changelogRouter);
 
 const port = Number(process.env.PORT) || 3001;
 app.listen(port, () => {
