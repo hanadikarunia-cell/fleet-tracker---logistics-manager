@@ -46,7 +46,11 @@ vehiclesRouter.get('/:id/history', async (req, res) => {
 });
 
 vehiclesRouter.post('/', requireRole(writeRoles), async (req, res) => {
-  const row = toSnakeRow(req.body);
+  // Never trust a client-supplied tenant_id/tenantId — the authenticated user's own
+  // tenant (set by requireAuth) is the only valid source.
+  const { tenant_id: _ignoredSnake, tenantId: _ignoredCamel, ...body } = req.body ?? {};
+  const row = toSnakeRow(body);
+  row.tenant_id = req.tenantId;
   const { data, error } = await supabase.from('vehicles').insert(row).select().single();
   if (error) return res.status(400).json({ error: error.message });
   res.status(201).json(mapVehicleRow(data));

@@ -42,6 +42,7 @@ feedbackRouter.post('/', upload.single('image'), async (req, res) => {
       user_name: req.user!.name,
       message: message.trim(),
       image_url: imageUrl,
+      tenant_id: req.tenantId,
     })
     .select()
     .single();

@@ -36,12 +36,25 @@ async function main() {
     if (error) throw error;
   }
 
+  // tenant_id is required (Phase 1). This script only ever provisions the bootstrap
+  // tenant created by schema.sql — not a redesign, just the minimum lookup needed so
+  // the existing upsert satisfies the NOT NULL constraint.
+  const { data: tenant, error: tenantError } = await supabase
+    .from('tenants')
+    .select('id')
+    .eq('subdomain', 'tangerang-logistics')
+    .single();
+  if (tenantError || !tenant) {
+    throw tenantError ?? new Error('Bootstrap tenant "tangerang-logistics" not found — has Phase 1 been migrated?');
+  }
+
   const { error: profileError } = await supabase.from('app_users').upsert({
     id: userId,
     name,
     email,
     role: 'admin',
     department: 'Fleet Operations',
+    tenant_id: tenant.id,
   });
   if (profileError) throw profileError;
 

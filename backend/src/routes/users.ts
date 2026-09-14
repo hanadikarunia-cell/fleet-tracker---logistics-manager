@@ -33,9 +33,10 @@ usersRouter.post('/', async (req, res) => {
   });
   if (createError) return res.status(400).json({ error: createError.message });
 
+  // The new account belongs to the creating admin's own tenant — never client-supplied.
   const { data: profile, error: profileError } = await supabase
     .from('app_users')
-    .insert({ id: created.user.id, name, email, role, department })
+    .insert({ id: created.user.id, name, email, role, department, tenant_id: req.tenantId })
     .select()
     .single();
   if (profileError) {

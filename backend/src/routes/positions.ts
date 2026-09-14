@@ -49,8 +49,10 @@ positionsRouter.post('/', async (req, res) => {
   const previousLat = vehicle.lat;
   const previousLng = vehicle.lng;
 
-  // 1. Record the raw ping.
-  await supabase.from('location_history').insert({
+  // 1. Record the raw ping. This route has no user session (a device posts directly,
+  // not through requireAuth), so the tenant comes from the device row already looked
+  // up above — not from the request body, which is untrusted here.
+  const { error: historyError } = await supabase.from('location_history').insert({
     vehicle_id: vehicle.id,
     device_id,
     lat,
@@ -58,7 +60,11 @@ positionsRouter.post('/', async (req, res) => {
     speed,
     heading,
     timestamp,
+    tenant_id: device.tenant_id,
   });
+  if (historyError) {
+    console.error(`Failed to record location_history for device "${device_id}":`, historyError.message);
+  }
 
   // 2. Update the vehicle's live position.
   const nextStatus = vehicle.status === 'maintenance' ? 'maintenance' : speed > 1 ? 'active' : 'idle';
@@ -83,7 +89,7 @@ positionsRouter.post('/', async (req, res) => {
     if (wasInside === isInside) continue;
 
     const alertType = isInside ? 'enter' : 'exit';
-    const { data: alert } = await supabase
+    const { data: alert, error: alertError } = await supabase
       .from('fleet_alerts')
       .insert({
         vehicle_id: vehicle.id,
@@ -94,9 +100,13 @@ positionsRouter.post('/', async (req, res) => {
         resolved: false,
         severity: 'info',
         details: `${vehicle.name} ${alertType === 'enter' ? 'entered' : 'exited'} geofence "${fence.name}".`,
+        tenant_id: device.tenant_id,
       })
       .select()
       .single();
+    if (alertError) {
+      console.error(`Failed to record geofence alert for vehicle "${vehicle.id}":`, alertError.message);
+    }
     if (alert) newAlerts.push(alert);
   }
 

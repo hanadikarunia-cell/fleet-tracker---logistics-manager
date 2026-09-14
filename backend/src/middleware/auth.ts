@@ -6,6 +6,7 @@ export interface AuthedUser {
   email: string;
   role: string;
   name: string;
+  tenantId: string;
 }
 
 declare global {
@@ -13,6 +14,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: AuthedUser;
+      tenantId?: string;
     }
   }
 }
@@ -36,7 +38,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   if (profileError) return res.status(500).json({ error: profileError.message });
   if (!profile) return res.status(403).json({ error: 'No app profile for this account' });
 
-  req.user = { id: data.user.id, email: data.user.email ?? profile.email, role: profile.role, name: profile.name };
+  req.user = {
+    id: data.user.id,
+    email: data.user.email ?? profile.email,
+    role: profile.role,
+    name: profile.name,
+    tenantId: profile.tenant_id,
+  };
+  req.tenantId = profile.tenant_id;
   next();
 }
 

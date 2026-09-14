@@ -7,6 +7,18 @@ import { supabase } from '../supabaseClient.js';
 dotenv.config();
 
 async function main() {
+  // tenant_id is required (Phase 1). This script only ever seeds the bootstrap tenant
+  // created by schema.sql — not a redesign, just the minimum lookup needed so the
+  // existing upserts satisfy the NOT NULL constraint.
+  const { data: tenant, error: tenantError } = await supabase
+    .from('tenants')
+    .select('id')
+    .eq('subdomain', 'tangerang-logistics')
+    .single();
+  if (tenantError || !tenant) {
+    throw tenantError ?? new Error('Bootstrap tenant "tangerang-logistics" not found — has Phase 1 been migrated?');
+  }
+
   // gps_devices and vehicles reference each other (device -> assigned vehicle,
   // vehicle -> its device), so the device row goes in first without the back-reference,
   // then the vehicle, then the device is updated to point at it.
@@ -17,6 +29,7 @@ async function main() {
     status: 'offline',
     battery_level: 100,
     signal_strength: 'good',
+    tenant_id: tenant.id,
   });
   if (deviceInsertError) throw deviceInsertError;
 
@@ -35,6 +48,7 @@ async function main() {
     max_cargo_weight: 0,
     driver_name: 'Hanadi',
     icon_color: '#3B82F6',
+    tenant_id: tenant.id,
   });
   if (vehicleError) throw vehicleError;
 
