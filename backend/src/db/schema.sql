@@ -669,3 +669,97 @@ revoke execute on function public.validate_device_credential(text, text) from pu
 revoke execute on function public.validate_device_credential(text, text) from anon;
 revoke execute on function public.validate_device_credential(text, text) from authenticated;
 grant execute on function public.validate_device_credential(text, text) to service_role;
+
+-- =========================================================================
+-- DEVICE PAIRING — QR/manual-code enrollment that hands a browser a device
+-- credential without a human ever copying the plaintext token.
+-- =========================================================================
+-- device_credentials only ever stores a hash — by design, the plaintext is
+-- never retrievable again after issuance/rotation. That means pairing can't
+-- "look up and return the existing token"; it has to authorize a fresh
+-- rotation and deliver the new token straight to the pairing browser instead
+-- of to an admin's screen. A pairing code is therefore a short-lived,
+-- single-use secret whose only power is "trigger one rotation, once."
+--
+-- Same conventions as device_credentials throughout: only a hash is ever
+-- stored (code_hash, sha256 of the plaintext code — the plaintext exists
+-- only in the one-time admin-facing response), RLS enabled with no policy
+-- (service-role/security-definer-only), and the entire validate+consume+
+-- rotate sequence happens in one atomic statement so there is no window for
+-- the same code to be used twice or for a scan to race a manual entry.
+create table if not exists device_pairing_codes (
+  id uuid primary key default gen_random_uuid(),
+  device_id text not null references gps_devices(id) on delete cascade,
+  tenant_id uuid not null references tenants(id) on delete restrict,
+  code_hash text not null unique,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  used_at timestamptz
+);
+
+create index if not exists device_pairing_codes_device_id_idx on device_pairing_codes (device_id);
+
+alter table device_pairing_codes enable row level security;
+-- No policy at all — same posture as device_credentials: never touched via
+-- the anon/authenticated PostgREST surface, only the backend's service-role
+-- connection and the security-definer function below.
+
+-- ---------------------------------------------------------------------------
+-- consume_pairing_code: the entire pairing decision in one atomic statement.
+-- A CTE's UPDATE proves the presented code hashes to an unused, unexpired,
+-- unrevoked row for exactly this device_id with a consistent tenant across
+-- gps_devices and device_pairing_codes — and marks it used — in the same
+-- operation that then upserts the new credential, so there is no gap between
+-- "code was valid" and "code is now consumed" for a concurrent second
+-- attempt with the same code to land in. If the UPDATE matches zero rows
+-- (unknown device, wrong code, expired, already used, revoked, or a tenant
+-- inconsistency), the CTE is empty, the INSERT selects nothing, and the
+-- function returns zero rows — indistinguishable from every other failure
+-- reason, exactly like validate_device_credential.
+-- ---------------------------------------------------------------------------
+-- The OUT parameter is deliberately NOT named device_id/tenant_id: PL/pgSQL's
+-- `returns table (...)` creates OUT variables in the function's own namespace, and
+-- if one shares a name with a column referenced anywhere in the query body,
+-- Postgres can no longer tell whether a bare reference means the column or the
+-- variable — surfacing as "column reference is ambiguous" even though every
+-- reference below is already table-qualified. Naming it paired_device_id sidesteps
+-- the collision entirely.
+create or replace function public.consume_pairing_code(
+  p_device_id text,
+  p_code_hash text,
+  p_new_token_hash text
+)
+returns table (paired_device_id text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+    with consumed as (
+      update public.device_pairing_codes pc
+      set used_at = now()
+      from public.gps_devices gd
+      where pc.device_id = p_device_id
+        and pc.code_hash = p_code_hash
+        and pc.used_at is null
+        and pc.expires_at > now()
+        and gd.id = pc.device_id
+        and gd.tenant_id = pc.tenant_id
+      returning pc.device_id, pc.tenant_id
+    )
+    insert into public.device_credentials (device_id, tenant_id, token_hash, created_at, revoked_at)
+    select c.device_id, c.tenant_id, p_new_token_hash, now(), null
+    from consumed c
+    on conflict (device_id) do update
+      set token_hash = excluded.token_hash,
+          created_at = excluded.created_at,
+          revoked_at = null
+    returning device_credentials.device_id;
+end;
+$$;
+
+revoke execute on function public.consume_pairing_code(text, text, text) from public;
+revoke execute on function public.consume_pairing_code(text, text, text) from anon;
+revoke execute on function public.consume_pairing_code(text, text, text) from authenticated;
+grant execute on function public.consume_pairing_code(text, text, text) to service_role;

@@ -12,10 +12,22 @@ async function authHeaders(): Promise<Record<string, string>> {
   return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
+// Carries the HTTP status alongside the message so callers that need to react
+// specifically to e.g. 401 (the tracker page, on a revoked/invalid device
+// credential) can do so without string-matching error text. Still an Error, so
+// every existing `err instanceof Error ? err.message : ...` call site is unaffected.
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function handleResponse<T>(res: Response, path: string): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request to ${path} failed with status ${res.status}`);
+    throw new ApiError(body.error || `Request to ${path} failed with status ${res.status}`, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -65,6 +77,12 @@ export const api = {
     remove: (id: string) => del(`/api/devices/${id}`),
     rotateToken: (id: string) => post<{ token: string }>(`/api/devices/${id}/rotate-token`, {}),
     revokeToken: (id: string) => post<void>(`/api/devices/${id}/revoke-token`, {}),
+    // Pairing-code generation is admin-authenticated (goes through the normal
+    // session-bearing `post`); consuming the code to pair is unauthenticated — the
+    // phone has no session yet, so it goes through `postDevice` with no token.
+    generatePairingCode: (id: string) =>
+      post<{ code: string; expiresAt: string; deviceId: string }>(`/api/devices/${id}/pairing-code`, {}),
+    pair: (id: string, code: string) => postDevice<{ token: string }>(`/api/devices/${id}/pair`, { code }),
   },
   geofences: {
     list: () => get<Geofence[]>('/api/geofences'),

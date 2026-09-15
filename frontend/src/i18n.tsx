@@ -12,6 +12,7 @@ const translations = {
   'brand.subtitle': { en: 'Tangerang Logistics', id: 'Logistik Tangerang' },
 
   'common.cancel': { en: 'Cancel', id: 'Batal' },
+  'common.close': { en: 'Close', id: 'Tutup' },
   'common.save': { en: 'Save', id: 'Simpan' },
   'common.edit': { en: 'Edit', id: 'Ubah' },
   'common.delete': { en: 'Delete', id: 'Hapus' },
@@ -226,6 +227,13 @@ const translations = {
   'dm.tokenRevealDesc': { en: 'This is the authentication token for device {deviceId}. Enter it on that device\'s tracker page.', id: 'Ini adalah token autentikasi untuk perangkat {deviceId}. Masukkan token ini di halaman pelacak perangkat tersebut.' },
   'dm.tokenRevealWarning': { en: 'This token will not be shown again. Copy it now and store it securely.', id: 'Token ini tidak akan ditampilkan lagi. Salin sekarang dan simpan dengan aman.' },
   'dm.tokenRevealDone': { en: "I've saved it", id: 'Sudah saya simpan' },
+  'dm.pairDevice': { en: 'Pair Device (QR)', id: 'Pasangkan Perangkat (QR)' },
+  'dm.pairDeviceTitle': { en: 'Pair This Device', id: 'Pasangkan Perangkat Ini' },
+  'dm.pairDeviceDesc': { en: 'Scan this QR code with the phone for device {deviceId} to pair it automatically.', id: 'Pindai kode QR ini dengan ponsel untuk perangkat {deviceId} agar terpasang otomatis.' },
+  'dm.pairManualCodeLabel': { en: "Can't scan? Enter this code manually", id: 'Tidak bisa memindai? Masukkan kode ini secara manual' },
+  'dm.pairExpiresIn': { en: 'Expires in {seconds}s', id: 'Kedaluwarsa dalam {seconds}d' },
+  'dm.pairExpired': { en: 'This pairing code has expired. Generate a new one.', id: 'Kode pemasangan ini sudah kedaluwarsa. Buat kode baru.' },
+  'dm.pairNotToken': { en: 'This is not the device token — it only authorizes one pairing.', id: 'Ini bukan token perangkat — hanya mengizinkan satu kali pemasangan.' },
 
   // Fleet Directory (VehicleManagement)
   'vm.readOnlyAlert': { en: 'READ-ONLY AUDITOR MODE: You are signed in as a Viewer. Logistics fleet registrations, statuses, and device pairings are locked from modifications.', id: 'MODE AUDITOR HANYA-LIHAT: Anda masuk sebagai Viewer. Registrasi armada, status, dan pemasangan perangkat terkunci dari perubahan.' },

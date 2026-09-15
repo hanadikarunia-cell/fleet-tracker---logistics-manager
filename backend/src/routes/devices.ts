@@ -139,6 +139,46 @@ devicesRouter.post('/:id/rotate-token', requireRole(writeRoles), async (req, res
   res.json({ token });
 });
 
+// Pairing code generation: an admin-facing, one-time-reveal secret distinct from the
+// device token itself — its only power is authorizing one credential rotation via
+// POST /api/devices/:id/pair (pairing.ts, unauthenticated). Short-lived (10 minutes)
+// and single-use (enforced atomically in consume_pairing_code, not here).
+const PAIRING_CODE_TTL_MS = 10 * 60 * 1000;
+const PAIRING_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L — avoids transcription errors
+
+function generatePairingCode(): string {
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += PAIRING_CODE_ALPHABET[crypto.randomInt(PAIRING_CODE_ALPHABET.length)];
+  }
+  return `${code.slice(0, 4)}-${code.slice(4)}`;
+}
+
+devicesRouter.post('/:id/pairing-code', requireRole(writeRoles), async (req, res) => {
+  const { data: device, error: deviceError } = await supabase
+    .from('gps_devices')
+    .select('id')
+    .eq('id', req.params.id)
+    .eq('tenant_id', req.tenantId)
+    .maybeSingle();
+  if (deviceError) return res.status(500).json({ error: deviceError.message });
+  if (!device) return res.status(404).json({ error: 'Not found' });
+
+  const code = generatePairingCode();
+  const expiresAt = new Date(Date.now() + PAIRING_CODE_TTL_MS).toISOString();
+  const { error } = await supabase.from('device_pairing_codes').insert({
+    device_id: req.params.id,
+    tenant_id: req.tenantId,
+    code_hash: hashToken(code),
+    expires_at: expiresAt,
+  });
+  if (error) return res.status(400).json({ error: error.message });
+
+  // Plaintext code returned once — this is NOT the device token; it only ever
+  // authorizes a single pairing exchange, never authenticates a position directly.
+  res.status(201).json({ code, expiresAt, deviceId: req.params.id });
+});
+
 devicesRouter.post('/:id/revoke-token', requireRole(writeRoles), async (req, res) => {
   const { data, error } = await supabase
     .from('device_credentials')

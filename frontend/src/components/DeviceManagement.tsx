@@ -1,9 +1,10 @@
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
+import QRCode from 'qrcode';
 import { GPSDevice, Vehicle } from '../types';
 import { useLanguage } from '../i18n';
 import {
   Cpu, Plus, Edit, Trash2, CheckCircle, AlertTriangle,
-  Battery, Wifi, Eye, RefreshCw, Radio, ShieldCheck, KeyRound, Ban, X
+  Battery, Wifi, Eye, RefreshCw, Radio, ShieldCheck, KeyRound, Ban, X, QrCode
 } from 'lucide-react';
 
 interface DeviceManagementProps {
@@ -15,6 +16,7 @@ interface DeviceManagementProps {
   onDeleteDevice: (id: string) => void;
   onRotateDeviceToken: (id: string) => Promise<{ token: string }>;
   onRevokeDeviceToken: (id: string) => Promise<void>;
+  onGeneratePairingCode: (id: string) => Promise<{ code: string; expiresAt: string; deviceId: string }>;
 }
 
 export default function DeviceManagement({
@@ -26,13 +28,25 @@ export default function DeviceManagement({
   onDeleteDevice,
   onRotateDeviceToken,
   onRevokeDeviceToken,
+  onGeneratePairingCode,
 }: DeviceManagementProps) {
   const { t } = useLanguage();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
   // Shown exactly once, right after registration or a rotation — never re-fetchable.
+  // Admin-only fallback (see requirement to keep the manual reveal flow separate
+  // from normal phone pairing UX) — the pairing modal below never shows this.
   const [revealedToken, setRevealedToken] = useState<{ deviceId: string; token: string } | null>(null);
   const [tokenActionError, setTokenActionError] = useState<string | null>(null);
+
+  // Pairing: this is NOT the device token — it's a short-lived, single-use code that
+  // only authorizes one pairing exchange (see POST /api/devices/:id/pair). The QR
+  // encodes a link to the tracker page carrying the same code, so scanning it with
+  // the phone's camera app pairs automatically; the code is also shown as text for
+  // manual entry when scanning isn't possible.
+  const [pairingInfo, setPairingInfo] = useState<{ deviceId: string; code: string; expiresAt: string; qrDataUrl: string } | null>(null);
+  const [pairingError, setPairingError] = useState<string | null>(null);
+  const [pairingSecondsLeft, setPairingSecondsLeft] = useState(0);
 
   // Form states
   const [formId, setFormId] = useState('');
@@ -94,6 +108,29 @@ export default function DeviceManagement({
       setTokenActionError(err instanceof Error ? err.message : t('dm.tokenActionFailed'));
     }
   };
+
+  const handleGeneratePairingCode = async (deviceId: string) => {
+    setPairingError(null);
+    try {
+      const { code, expiresAt } = await onGeneratePairingCode(deviceId);
+      const pairUrl = `${window.location.origin}/track.html?deviceId=${encodeURIComponent(deviceId)}&pair=${encodeURIComponent(code)}`;
+      const qrDataUrl = await QRCode.toDataURL(pairUrl, { margin: 1, width: 220 });
+      setPairingInfo({ deviceId, code, expiresAt, qrDataUrl });
+    } catch (err) {
+      setTokenActionError(err instanceof Error ? err.message : t('dm.tokenActionFailed'));
+    }
+  };
+
+  useEffect(() => {
+    if (!pairingInfo) return;
+    const tick = () => {
+      const secondsLeft = Math.max(0, Math.round((new Date(pairingInfo.expiresAt).getTime() - Date.now()) / 1000));
+      setPairingSecondsLeft(secondsLeft);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [pairingInfo]);
 
   const startEdit = (device: GPSDevice) => {
     setEditingDeviceId(device.id);
@@ -406,6 +443,14 @@ export default function DeviceManagement({
                       <Edit className="w-3 h-3" /> {t('dm.config')}
                     </button>
                     <button
+                      id={`btn-pair-device-${device.id}`}
+                      onClick={() => handleGeneratePairingCode(device.id)}
+                      className="p-1.5 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 rounded-lg transition cursor-pointer"
+                      title={t('dm.pairDevice')}
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       id={`btn-rotate-token-${device.id}`}
                       onClick={() => handleRotate(device.id)}
                       className="p-1.5 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg transition cursor-pointer"
@@ -485,6 +530,54 @@ export default function DeviceManagement({
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition cursor-pointer select-none"
               >
                 {t('dm.tokenRevealDone')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PAIRING MODAL — QR primary, manual code fallback. Never shows the device
+          token itself; the code here only authorizes one pairing exchange. */}
+      {pairingInfo && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" id="modal-pairing">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-slate-100">
+            <div className="flex gap-3 text-slate-800">
+              <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl h-fit shrink-0">
+                <QrCode className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900">{t('dm.pairDeviceTitle')}</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">{t('dm.pairDeviceDesc').replace('{deviceId}', pairingInfo.deviceId)}</p>
+              </div>
+            </div>
+
+            {pairingSecondsLeft > 0 ? (
+              <>
+                <div className="flex justify-center">
+                  <img src={pairingInfo.qrDataUrl} alt="Pairing QR code" className="rounded-xl border border-slate-200" width={220} height={220} />
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t('dm.pairManualCodeLabel')}</p>
+                  <p className="text-lg font-mono font-extrabold text-slate-800 tracking-wider select-all">{pairingInfo.code}</p>
+                </div>
+
+                <p className="text-center text-[11px] font-bold text-amber-600">
+                  {t('dm.pairExpiresIn').replace('{seconds}', String(pairingSecondsLeft))}
+                </p>
+                <p className="text-[10px] text-slate-500 text-center">{t('dm.pairNotToken')}</p>
+              </>
+            ) : (
+              <p className="text-center text-xs text-rose-600 font-bold py-4">{t('dm.pairExpired')}</p>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <button
+                id="btn-close-pairing"
+                onClick={() => setPairingInfo(null)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition cursor-pointer select-none"
+              >
+                {t('common.close')}
               </button>
             </div>
           </div>

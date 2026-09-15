@@ -3,6 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- This page can be opened via a QR link carrying a short-lived pairing code in its
+         query string. Modern browsers already default to strict-origin-when-cross-origin
+         (never sending path/query to a cross-origin request), but this page pins the
+         strictest policy explicitly rather than relying on that default, since a
+         cross-origin sub-resource fetch (e.g. this page's Google Fonts CSS @import) can
+         fire before the app's own JS has a chance to scrub the URL via replaceState. -->
+    <meta name="referrer" content="no-referrer" />
     <title>Fleet Tracker - Phone GPS</title>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased font-sans">

@@ -674,6 +674,10 @@ export default function App() {
     await api.devices.revokeToken(id);
   };
 
+  const handleGeneratePairingCode = async (id: string) => {
+    return api.devices.generatePairingCode(id);
+  };
+
   const handleEditDevice = async (id: string, updatedFields: Partial<GPSDevice>) => {
     const updated = await api.devices.update(id, updatedFields);
     setDevices((prev) => prev.map((d) => (d.id === id ? updated : d)));
@@ -1417,6 +1421,7 @@ export default function App() {
               onDeleteDevice={handleDeleteDevice}
               onRotateDeviceToken={handleRotateDeviceToken}
               onRevokeDeviceToken={handleRevokeDeviceToken}
+              onGeneratePairingCode={handleGeneratePairingCode}
             />
           )}
 
