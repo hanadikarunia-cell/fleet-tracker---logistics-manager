@@ -131,7 +131,7 @@ export default function MapView({
   // placeholder tile beyond that), which is coarser than any zoom this fleet map actually
   // uses. The hazard markers below are independent of that and work at any zoom — they're
   // driven by real current precipitation per vehicle location (see the fetch effect below).
-  const [showWeatherRadar, setShowWeatherRadar] = useState(settings.showWeather ?? true);
+  const [showWeatherRadar, setShowWeatherRadar] = useState(settings.showWeather ?? false);
   const [showWeatherHud, setShowWeatherHud] = useState(true);
   const [vehicleWeather, setVehicleWeather] = useState<Record<string, VehicleWeather>>({});
   const [weatherFetchedAt, setWeatherFetchedAt] = useState<Date | null>(null);

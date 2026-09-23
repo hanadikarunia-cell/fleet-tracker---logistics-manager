@@ -5,7 +5,7 @@ import {
   LocationHistoryPoint, MapSettings, AppUser, UserRole, CustomRoute, Feedback, FeedbackStatus,
   ChangelogEntry, ChangelogBumpType, Tenant, TenantStatus
 } from './types';
-import { api } from './api';
+import { api, setActiveTenantOverride } from './api';
 import { supabase } from './supabaseClient';
 import LoginScreen from './LoginScreen';
 import MapView from './components/MapView';
@@ -61,7 +61,9 @@ export default function App() {
       batteryOptimization: parsed.batteryOptimization ?? 'balanced',
       updateInterval: parsed.updateInterval ?? 10,
       showGeofences: parsed.showGeofences ?? true,
-      showWeather: parsed.showWeather ?? true,
+      // Always starts hidden — the radar panel is opt-in per session (map's cloud-rain
+      // button), so a previously saved "on" value is deliberately not restored.
+      showWeather: false,
       autoPositionUpdates: parsed.autoPositionUpdates ?? true,
     };
   });
@@ -97,6 +99,8 @@ export default function App() {
     api.auth
       .me()
       .then((profile) => {
+        // A saved tenant-switcher selection only means something for platform admins.
+        if (!profile.isPlatformAdmin) setActiveTenantOverride(null);
         if (!cancelled) setCurrentUser(profile);
       })
       .catch((err) => {
@@ -108,8 +112,24 @@ export default function App() {
   }, [session]);
 
   const handleSignOut = () => {
+    setActiveTenantOverride(null);
     supabase?.auth.signOut();
   };
+
+  // Platform-admin tenant switcher. The selection is stored, then the page reloads so every
+  // piece of tenant data is refetched from scratch — nothing from the previous tenant can
+  // linger in state. Picking the admin's own tenant just clears the override.
+  const handleSwitchTenant = (tenantId: string) => {
+    setActiveTenantOverride(tenantId === currentUser?.tenantId ? null : tenantId);
+    window.location.reload();
+  };
+
+  const isActingAsOtherTenant =
+    !!currentUser?.isPlatformAdmin && !!currentUser.activeTenantId && currentUser.activeTenantId !== currentUser.tenantId;
+  // Realtime (below) is bound to the admin's HOME tenant by RLS, so while acting as another
+  // tenant its pushes must be dropped rather than mixed into that tenant's data.
+  const isActingAsOtherTenantRef = useRef(false);
+  isActingAsOtherTenantRef.current = isActingAsOtherTenant;
 
   const [customRoutes, setCustomRoutes] = useState<CustomRoute[]>(() => {
     const saved = localStorage.getItem('fleet_custom_routes');
@@ -253,9 +273,25 @@ export default function App() {
     api.platform.tenants.list().then(setTenants).catch((err) => console.error('Failed to load tenants:', err));
   };
 
+  // Also loaded on login (not just when the Tenant Portal tab opens) — the sidebar's
+  // tenant switcher needs the list.
   useEffect(() => {
     if (activeTab === 'tenants') loadTenants();
   }, [activeTab]);
+
+  useEffect(() => {
+    loadTenants();
+  }, [currentUser?.isPlatformAdmin]);
+
+  // No live push while acting as another tenant (see isActingAsOtherTenantRef), so poll
+  // the vehicle positions instead to keep that view fresh.
+  useEffect(() => {
+    if (!isActingAsOtherTenant) return;
+    const interval = setInterval(() => {
+      api.vehicles.list().then(setVehicles).catch((err) => console.error('Failed to refresh vehicles:', err));
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isActingAsOtherTenant]);
 
   // The changelog is visible to every role — fetch once a profile is resolved.
   useEffect(() => {
@@ -280,6 +316,7 @@ export default function App() {
     const channel = supabase
       .channel('fleet-tracker-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, (payload) => {
+        if (isActingAsOtherTenantRef.current) return;
         if (payload.eventType === 'DELETE') {
           setVehicles((prev) => prev.filter((v) => v.id !== (payload.old as any).id));
           return;
@@ -292,6 +329,7 @@ export default function App() {
         });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'fleet_alerts' }, (payload) => {
+        if (isActingAsOtherTenantRef.current) return;
         if (payload.eventType === 'DELETE') {
           setAlerts((prev) => prev.filter((a) => a.id !== (payload.old as any).id));
           return;
@@ -896,7 +934,9 @@ export default function App() {
               <div>
                 <h1 className="font-extrabold text-sm tracking-wider">{t('brand.name')}</h1>
                 <div className="flex items-center gap-1.5">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{t('brand.subtitle')}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                    {currentUser.activeTenantName ?? t('brand.subtitle')}
+                  </p>
                   {changelog[0]?.version && (
                     <button
                       id="btn-version-tag"
@@ -913,6 +953,36 @@ export default function App() {
 
             <LanguageToggle dark />
           </div>
+
+          {/* Tenant switcher — platform (app-level) admins only */}
+          {currentUser.isPlatformAdmin && (
+            <div className={`px-5 py-3 border-b border-slate-800 ${isActingAsOtherTenant ? 'bg-amber-500/10' : ''}`}>
+              <label
+                htmlFor="select-switch-tenant"
+                className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5"
+              >
+                <Building2 className="w-3 h-3" />
+                {isActingAsOtherTenant ? 'Acting as tenant' : 'Switch tenant'}
+              </label>
+              <select
+                id="select-switch-tenant"
+                value={currentUser.activeTenantId ?? ''}
+                onChange={(e) => handleSwitchTenant(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 text-white text-xs font-semibold rounded-lg px-2.5 py-2 outline-none focus:border-blue-500"
+              >
+                {tenants.length === 0 && (
+                  <option value={currentUser.activeTenantId ?? ''}>{currentUser.activeTenantName ?? '…'}</option>
+                )}
+                {tenants.map((tn) => (
+                  <option key={tn.id} value={tn.id}>
+                    {tn.name}
+                    {tn.id === currentUser.tenantId ? ' (your tenant)' : ''}
+                    {tn.status !== 'active' ? ` — ${tn.status}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Signed-in Account Widget */}
           <div className="mx-4 mt-2 mb-4 p-2.5 bg-slate-800/80 rounded-xl border border-slate-700/60 flex items-center gap-2">

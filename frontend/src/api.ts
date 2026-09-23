@@ -7,9 +7,35 @@ import { supabase } from './supabaseClient';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001';
 
+// Platform-admin tenant switcher: the selected tenant id lives in localStorage and rides
+// along on every authenticated request as X-Tenant-Id. The backend honors it only for
+// platform admins and ignores it for everyone else, so a stale value is harmless.
+const ACTIVE_TENANT_KEY = 'fleet_active_tenant';
+
+export function getActiveTenantOverride(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_TENANT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveTenantOverride(tenantId: string | null) {
+  try {
+    if (tenantId) localStorage.setItem(ACTIVE_TENANT_KEY, tenantId);
+    else localStorage.removeItem(ACTIVE_TENANT_KEY);
+  } catch {
+    // storage unavailable — the switcher just won't persist
+  }
+}
+
 async function authHeaders(): Promise<Record<string, string>> {
   const session = supabase ? (await supabase.auth.getSession()).data.session : null;
-  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  if (!session?.access_token) return {};
+  const headers: Record<string, string> = { Authorization: `Bearer ${session.access_token}` };
+  const tenantOverride = getActiveTenantOverride();
+  if (tenantOverride) headers['X-Tenant-Id'] = tenantOverride;
+  return headers;
 }
 
 // Carries the HTTP status alongside the message so callers that need to react

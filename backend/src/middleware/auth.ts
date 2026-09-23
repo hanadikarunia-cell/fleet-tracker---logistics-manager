@@ -59,8 +59,28 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     isPlatformAdmin: !!platformAdmin,
   };
   req.tenantId = profile.tenant_id;
+
+  // Tenant switcher (platform admins only): X-Tenant-Id makes every tenant-scoped route
+  // operate on that tenant instead of the caller's home one. Every route already reads
+  // req.tenantId, so none of them needed to change. For anyone who isn't a platform admin
+  // the header is ignored outright — never trusted, never an error — so it can't be used
+  // to probe which tenant ids exist.
+  const requestedTenant = req.headers['x-tenant-id'];
+  if (req.user.isPlatformAdmin && typeof requestedTenant === 'string' && requestedTenant && requestedTenant !== profile.tenant_id) {
+    if (!UUID_RE.test(requestedTenant)) return res.status(400).json({ error: 'Invalid X-Tenant-Id' });
+    const { data: target, error: targetError } = await supabase
+      .from('tenants')
+      .select('id')
+      .eq('id', requestedTenant)
+      .maybeSingle();
+    if (targetError) return res.status(500).json({ error: targetError.message });
+    if (!target) return res.status(400).json({ error: 'Unknown tenant' });
+    req.tenantId = target.id;
+  }
   next();
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function requireRole(roles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {

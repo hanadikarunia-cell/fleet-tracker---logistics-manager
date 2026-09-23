@@ -185,6 +185,11 @@ export interface AppUser {
   avatar?: string;
   department?: string;
   isPlatformAdmin?: boolean;
+  // The tenant this session's requests are scoped to — the user's own tenant unless a
+  // platform admin is using the tenant switcher.
+  activeTenantId?: string;
+  activeTenantName?: string | null;
+  tenantId?: string;
 }
 
 export type FeedbackStatus = 'new' | 'reviewed' | 'resolved';
