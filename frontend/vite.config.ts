@@ -16,6 +16,7 @@ export default defineConfig(() => {
         input: {
           main: path.resolve(__dirname, 'index.html'),
           track: path.resolve(__dirname, 'track.html'),
+          app: path.resolve(__dirname, 'app.html'),
         },
       },
     },
