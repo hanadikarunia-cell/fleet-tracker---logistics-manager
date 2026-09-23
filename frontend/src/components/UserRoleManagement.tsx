@@ -9,7 +9,7 @@ import {
 interface UserRoleManagementProps {
   currentUser: AppUser;
   usersList: AppUser[];
-  onAddUser: (user: { name: string; email: string; role: UserRole; department?: string; password: string }) => void;
+  onAddUser: (user: { name: string; email: string; role: UserRole; department?: string; password: string }) => Promise<void>;
   onUpdateUserRole: (userId: string, newRole: UserRole) => void;
   onDeleteUser: (userId: string) => void;
 }
@@ -30,6 +30,7 @@ export default function UserRoleManagement({
   const [formDept, setFormDept] = useState('Operations');
   const [formPassword, setFormPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [isAddingUser, setIsAddingUser] = useState(false);
 
   // Account management is admin-only, both here and on the backend.
   const canManageRoles = currentUser.role === 'admin';
@@ -65,7 +66,7 @@ export default function UserRoleManagement({
     }
   };
 
-  const handleAddSubmit = (e: FormEvent) => {
+  const handleAddSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setFormError(null);
     if (!formName || !formEmail || !formPassword) return;
@@ -74,20 +75,27 @@ export default function UserRoleManagement({
       return;
     }
 
-    onAddUser({
-      name: formName,
-      email: formEmail,
-      role: formRole,
-      department: formDept,
-      password: formPassword
-    });
+    setIsAddingUser(true);
+    try {
+      await onAddUser({
+        name: formName,
+        email: formEmail,
+        role: formRole,
+        department: formDept,
+        password: formPassword
+      });
 
-    setFormName('');
-    setFormEmail('');
-    setFormRole('viewer');
-    setFormDept('Operations');
-    setFormPassword('');
-    setShowAddUserModal(false);
+      setFormName('');
+      setFormEmail('');
+      setFormRole('viewer');
+      setFormDept('Operations');
+      setFormPassword('');
+      setShowAddUserModal(false);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to create account.');
+    } finally {
+      setIsAddingUser(false);
+    }
   };
 
   // --- CHANGE MY OWN PASSWORD (any role, self-service) ---
@@ -450,9 +458,10 @@ export default function UserRoleManagement({
                 <button
                   id="form-btn-save"
                   type="submit"
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition"
+                  disabled={isAddingUser}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold rounded-lg transition"
                 >
-                  Create Account
+                  {isAddingUser ? 'Creating…' : 'Create Account'}
                 </button>
               </div>
             </form>
