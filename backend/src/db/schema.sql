@@ -763,3 +763,27 @@ revoke execute on function public.consume_pairing_code(text, text, text) from pu
 revoke execute on function public.consume_pairing_code(text, text, text) from anon;
 revoke execute on function public.consume_pairing_code(text, text, text) from authenticated;
 grant execute on function public.consume_pairing_code(text, text, text) to service_role;
+
+-- =========================================================================
+-- PLATFORM ADMIN — a cross-tenant operator role, orthogonal to the existing
+-- tenant-scoped admin/manager/viewer roles on app_users.
+-- =========================================================================
+-- Deliberately NOT a column on app_users and NOT another value in its role
+-- check constraint: those exist to answer "what can this person do inside
+-- their own tenant," and every access path for that (RLS policies,
+-- requireRole middleware) is built around "exactly one tenant." Platform
+-- admin answers a different question — "can this person see across every
+-- tenant at all" — so it's a separate allowlist the backend checks
+-- explicitly (in requireAuth, service-role, same as everything else this
+-- table's own posture protects), never something RLS policies reference.
+-- A user can hold a normal tenant-scoped role AND be a platform admin at
+-- the same time — the two are independent.
+create table if not exists platform_admins (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+alter table platform_admins enable row level security;
+-- No policy at all — service-role-only, same posture as app_users/feedback/
+-- device_credentials. Never reachable via the anon/authenticated PostgREST
+-- surface, only the backend's own service-role connection.

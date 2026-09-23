@@ -184,9 +184,22 @@ export interface AppUser {
   role: UserRole;
   avatar?: string;
   department?: string;
+  isPlatformAdmin?: boolean;
 }
 
 export type FeedbackStatus = 'new' | 'reviewed' | 'resolved';
+
+export type TenantStatus = 'active' | 'suspended' | 'trial';
+
+export interface Tenant {
+  id: string;
+  name: string;
+  subdomain: string;
+  plan: string;
+  status: TenantStatus;
+  userCount: number;
+  createdAt: string;
+}
 
 export interface Feedback {
   id: string;

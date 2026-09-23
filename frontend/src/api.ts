@@ -1,7 +1,7 @@
 import type {
   Vehicle, GPSDevice, Geofence, FleetAlert, MaintenanceLog,
   DriverPerformance, InventoryItem, InventoryMovement, LocationHistoryPoint, AppUser, Feedback, FeedbackStatus,
-  ChangelogEntry, ChangelogBumpType,
+  ChangelogEntry, ChangelogBumpType, Tenant, TenantStatus,
 } from './types';
 import { supabase } from './supabaseClient';
 
@@ -145,6 +145,15 @@ export const api = {
       post<ChangelogEntry>('/api/changelog', c),
     update: (id: string, c: { title?: string; changes?: string[] }) => put<ChangelogEntry>(`/api/changelog/${id}`, c),
     remove: (id: string) => del(`/api/changelog/${id}`),
+  },
+  platform: {
+    tenants: {
+      list: () => get<Tenant[]>('/api/platform/tenants'),
+      create: (t: { name: string; subdomain: string; adminName: string; adminEmail: string; adminPassword: string }) =>
+        post<Tenant>('/api/platform/tenants', t),
+      update: (id: string, t: { name?: string; status?: TenantStatus }) =>
+        request<Tenant>(`/api/platform/tenants/${id}`, { method: 'PATCH', body: JSON.stringify(t) }),
+    },
   },
   positions: {
     report: (

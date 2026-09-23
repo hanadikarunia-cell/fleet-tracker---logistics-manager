@@ -3,7 +3,7 @@ import {
   Vehicle, GPSDevice, Geofence, GeofenceAlert, FleetAlert,
   MaintenanceLog, DriverPerformance, InventoryItem,
   LocationHistoryPoint, MapSettings, AppUser, UserRole, CustomRoute, Feedback, FeedbackStatus,
-  ChangelogEntry, ChangelogBumpType
+  ChangelogEntry, ChangelogBumpType, Tenant, TenantStatus
 } from './types';
 import { api } from './api';
 import { supabase } from './supabaseClient';
@@ -18,6 +18,7 @@ import UserRoleManagement from './components/UserRoleManagement';
 import FeedbackModal from './components/FeedbackModal';
 import FeedbackView from './components/FeedbackView';
 import WhatsNewView from './components/WhatsNewView';
+import TenantPortal from './components/TenantPortal';
 import LanguageToggle from './components/LanguageToggle';
 import { useLanguage } from './i18n';
 import QuickAssetLocateBar from './components/common/QuickAssetLocateBar';
@@ -29,7 +30,7 @@ import type { Session } from '@supabase/supabase-js';
 import {
   Map, LayoutDashboard, Boxes, Users, Cpu, Truck,
   Plus, AlertOctagon, Info, Layers, Smartphone, Navigation, Fingerprint,
-  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare, Sparkles
+  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare, Sparkles, Building2
 } from 'lucide-react';
 
 export const ROLE_MODULES: Record<UserRole, string[]> = {
@@ -66,6 +67,7 @@ export default function App() {
   });
 
   const [users, setUsers] = useState<AppUser[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [changelog, setChangelog] = useState<ChangelogEntry[]>([]);
   const [lastSeenVersion, setLastSeenVersion] = useState<string | null>(() => localStorage.getItem('fleet_last_seen_version'));
@@ -124,7 +126,7 @@ export default function App() {
   }, [customRoutes]);
 
   // --- 2. INTERACTIVE UI STATES ---
-  const [activeTab, setActiveTab] = useState<'map' | 'dashboard' | 'telemetry' | 'eta' | 'efficiency' | 'inventory' | 'drivers' | 'devices' | 'vehicles' | 'users' | 'feedback' | 'whatsnew'>('map');
+  const [activeTab, setActiveTab] = useState<'map' | 'dashboard' | 'telemetry' | 'eta' | 'efficiency' | 'inventory' | 'drivers' | 'devices' | 'vehicles' | 'users' | 'feedback' | 'whatsnew' | 'tenants'>('map');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [historyPoints, setHistoryPoints] = useState<LocationHistoryPoint[] | null>(null);
   const [isPlayingHistory, setIsPlayingHistory] = useState(false);
@@ -246,6 +248,15 @@ export default function App() {
     if (activeTab === 'feedback') loadFeedback();
   }, [activeTab]);
 
+  const loadTenants = () => {
+    if (!currentUser?.isPlatformAdmin) return;
+    api.platform.tenants.list().then(setTenants).catch((err) => console.error('Failed to load tenants:', err));
+  };
+
+  useEffect(() => {
+    if (activeTab === 'tenants') loadTenants();
+  }, [activeTab]);
+
   // The changelog is visible to every role — fetch once a profile is resolved.
   useEffect(() => {
     if (!currentUser) return;
@@ -311,9 +322,15 @@ export default function App() {
     };
   }, []);
 
-  // Redirect to permitted tab if current active tab is unauthorized for active role
+  // Redirect to permitted tab if current active tab is unauthorized for active role.
+  // 'tenants' is deliberately not in ROLE_MODULES at all — it's gated by isPlatformAdmin,
+  // which is orthogonal to the tenant-scoped role system those arrays describe.
   useEffect(() => {
     if (!currentUser) return;
+    if (activeTab === 'tenants') {
+      if (!currentUser.isPlatformAdmin) setActiveTab('map');
+      return;
+    }
     const allowed = ROLE_MODULES[currentUser.role] || [];
     if (!allowed.includes(activeTab)) {
       setActiveTab(allowed[0] as any);
@@ -781,6 +798,17 @@ export default function App() {
     setUsers((prev) => prev.filter((user) => user.id !== userId));
   };
 
+  // --- TENANT PORTAL (platform-admin-only, backend-enforced) ---
+  const handleCreateTenant = async (t: { name: string; subdomain: string; adminName: string; adminEmail: string; adminPassword: string }) => {
+    const created = await api.platform.tenants.create(t);
+    setTenants((prev) => [created, ...prev]);
+  };
+
+  const handleUpdateTenant = async (id: string, t: { name?: string; status?: TenantStatus }) => {
+    const updated = await api.platform.tenants.update(id, t);
+    setTenants((prev) => prev.map((tenant) => (tenant.id === id ? { ...tenant, ...updated } : tenant)));
+  };
+
   // --- FEEDBACK (admin-only review) ---
   const handleUpdateFeedbackStatus = async (id: string, status: FeedbackStatus) => {
     const updated = await api.feedback.updateStatus(id, status);
@@ -1079,6 +1107,20 @@ export default function App() {
               </button>
             )}
 
+            {currentUser.isPlatformAdmin && (
+              <button
+                id="tab-tenants"
+                onClick={() => setActiveTab('tenants')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'tenants'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <Building2 className="w-4 h-4" /> Tenant Portal
+              </button>
+            )}
+
             {ROLE_MODULES[currentUser.role].includes('whatsnew') && (
               <button
                 id="tab-whatsnew"
@@ -1163,6 +1205,7 @@ export default function App() {
               {activeTab === 'users' && t('header.users.title')}
               {activeTab === 'feedback' && t('header.feedback.title')}
               {activeTab === 'whatsnew' && t('header.whatsnew.title')}
+              {activeTab === 'tenants' && 'Tenant Portal'}
             </h2>
             <p className="text-xs text-slate-500 font-semibold">
               {activeTab === 'map' && t('header.map.subtitle')}
@@ -1177,6 +1220,7 @@ export default function App() {
               {activeTab === 'users' && t('header.users.subtitle')}
               {activeTab === 'feedback' && t('header.feedback.subtitle')}
               {activeTab === 'whatsnew' && t('header.whatsnew.subtitle')}
+              {activeTab === 'tenants' && 'Every company using Fleet Tracker, in one place.'}
             </p>
           </div>
 
@@ -1433,6 +1477,15 @@ export default function App() {
               onAddUser={handleAddUser}
               onUpdateUserRole={handleUpdateUserRole}
               onDeleteUser={handleDeleteUser}
+            />
+          )}
+
+          {/* TAB: TENANT PORTAL (platform-admin-only) */}
+          {activeTab === 'tenants' && currentUser.isPlatformAdmin && (
+            <TenantPortal
+              tenants={tenants}
+              onCreateTenant={handleCreateTenant}
+              onUpdateTenant={handleUpdateTenant}
             />
           )}
 

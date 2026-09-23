@@ -6,6 +6,7 @@ import { positionsRouter } from './routes/positions.js';
 import { crudRouter } from './routes/crud.js';
 import { devicesRouter } from './routes/devices.js';
 import { pairingRouter } from './routes/pairing.js';
+import { platformRouter } from './routes/platform.js';
 import { usersRouter } from './routes/users.js';
 import { authRouter } from './routes/auth.js';
 import { feedbackRouter } from './routes/feedback.js';
@@ -57,6 +58,7 @@ app.use('/api/driver-performance', crudRouter('driver_performance'));
 app.use('/api/inventory', crudRouter('inventory_items'));
 app.use('/api/inventory-movements', crudRouter('inventory_movements', { orderBy: 'timestamp' }));
 app.use('/api/users', usersRouter);
+app.use('/api/platform', platformRouter);
 app.use('/api/feedback', feedbackRouter);
 app.use('/api/changelog', changelogRouter);
 

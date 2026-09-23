@@ -7,6 +7,7 @@ export interface AuthedUser {
   role: string;
   name: string;
   tenantId: string;
+  isPlatformAdmin: boolean;
 }
 
 declare global {
@@ -38,12 +39,24 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   if (profileError) return res.status(500).json({ error: profileError.message });
   if (!profile) return res.status(403).json({ error: 'No app profile for this account' });
 
+  // Platform-admin status is a separate, orthogonal allowlist — see schema.sql for why
+  // it's not a role value on app_users. One extra lookup per request; negligible at this
+  // app's scale, and keeping it a plain query (not cached) means a revoked platform admin
+  // loses access on their very next request, not whenever a cache happens to expire.
+  const { data: platformAdmin, error: platformAdminError } = await supabase
+    .from('platform_admins')
+    .select('user_id')
+    .eq('user_id', data.user.id)
+    .maybeSingle();
+  if (platformAdminError) return res.status(500).json({ error: platformAdminError.message });
+
   req.user = {
     id: data.user.id,
     email: data.user.email ?? profile.email,
     role: profile.role,
     name: profile.name,
     tenantId: profile.tenant_id,
+    isPlatformAdmin: !!platformAdmin,
   };
   req.tenantId = profile.tenant_id;
   next();
@@ -57,4 +70,12 @@ export function requireRole(roles: string[]) {
     }
     next();
   };
+}
+
+// Cross-tenant access (the platform's own operator portal) — deliberately separate from
+// requireRole, which only ever reasons about the caller's own tenant.
+export function requirePlatformAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+  if (!req.user.isPlatformAdmin) return res.status(403).json({ error: 'Requires platform admin access' });
+  next();
 }
