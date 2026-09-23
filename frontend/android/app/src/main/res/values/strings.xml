@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Fleet Tracker</string>
+    <string name="title_activity_main">Fleet Tracker</string>
+    <string name="package_name">com.fleettracker.app</string>
+    <string name="custom_url_scheme">com.fleettracker.app</string>
+</resources>

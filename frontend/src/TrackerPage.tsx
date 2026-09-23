@@ -309,6 +309,16 @@ export default function TrackerPage() {
             ))}
           </div>
         )}
+
+        {/* This page is the Android app's home screen (drivers have no login account in
+            this system at all), so this is the only way back to the full dashboard from
+            inside that same install — plain navigation, not a route, since index.html and
+            track.html are genuinely separate pages. Harmless on the regular website too. */}
+        <p className="text-center pt-2">
+          <a href="/" className="text-[10px] text-slate-600 hover:text-slate-400 underline underline-offset-2">
+            Open Full Dashboard
+          </a>
+        </p>
       </div>
     </div>
   );
