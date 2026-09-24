@@ -3,7 +3,7 @@ import {
   Vehicle, GPSDevice, Geofence, GeofenceAlert, FleetAlert,
   MaintenanceLog, DriverPerformance, InventoryItem,
   LocationHistoryPoint, MapSettings, AppUser, UserRole, CustomRoute, Feedback, FeedbackStatus,
-  ChangelogEntry, ChangelogBumpType, Tenant, TenantStatus
+  ChangelogEntry, ChangelogBumpType, Tenant, TenantStatus, PlatformAdmin
 } from './types';
 import { api, setActiveTenantOverride } from './api';
 import { supabase } from './supabaseClient';
@@ -19,6 +19,7 @@ import FeedbackModal from './components/FeedbackModal';
 import FeedbackView from './components/FeedbackView';
 import WhatsNewView from './components/WhatsNewView';
 import TenantPortal from './components/TenantPortal';
+import PlatformAdminsPanel from './components/PlatformAdminsPanel';
 import LanguageToggle from './components/LanguageToggle';
 import { useLanguage } from './i18n';
 import QuickAssetLocateBar from './components/common/QuickAssetLocateBar';
@@ -30,7 +31,7 @@ import type { Session } from '@supabase/supabase-js';
 import {
   Map, LayoutDashboard, Boxes, Users, Cpu, Truck,
   Plus, AlertOctagon, Info, Layers, Smartphone, Navigation, Fingerprint,
-  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare, Sparkles, Building2
+  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare, Sparkles, Building2, ShieldCheck
 } from 'lucide-react';
 
 export const ROLE_MODULES: Record<UserRole, string[]> = {
@@ -70,6 +71,7 @@ export default function App() {
 
   const [users, setUsers] = useState<AppUser[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [platformAdmins, setPlatformAdmins] = useState<PlatformAdmin[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [changelog, setChangelog] = useState<ChangelogEntry[]>([]);
   const [lastSeenVersion, setLastSeenVersion] = useState<string | null>(() => localStorage.getItem('fleet_last_seen_version'));
@@ -146,7 +148,7 @@ export default function App() {
   }, [customRoutes]);
 
   // --- 2. INTERACTIVE UI STATES ---
-  const [activeTab, setActiveTab] = useState<'map' | 'dashboard' | 'telemetry' | 'eta' | 'efficiency' | 'inventory' | 'drivers' | 'devices' | 'vehicles' | 'users' | 'feedback' | 'whatsnew' | 'tenants'>('map');
+  const [activeTab, setActiveTab] = useState<'map' | 'dashboard' | 'telemetry' | 'eta' | 'efficiency' | 'inventory' | 'drivers' | 'devices' | 'vehicles' | 'users' | 'feedback' | 'whatsnew' | 'tenants' | 'platform-admins'>('map');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [historyPoints, setHistoryPoints] = useState<LocationHistoryPoint[] | null>(null);
   const [isPlayingHistory, setIsPlayingHistory] = useState(false);
@@ -283,6 +285,11 @@ export default function App() {
     loadTenants();
   }, [currentUser?.isPlatformAdmin]);
 
+  useEffect(() => {
+    if (activeTab !== 'platform-admins' || !currentUser?.isPlatformAdmin) return;
+    api.platform.admins.list().then(setPlatformAdmins).catch((err) => console.error('Failed to load platform admins:', err));
+  }, [activeTab]);
+
   // No live push while acting as another tenant (see isActingAsOtherTenantRef), so poll
   // the vehicle positions instead to keep that view fresh.
   useEffect(() => {
@@ -365,7 +372,7 @@ export default function App() {
   // which is orthogonal to the tenant-scoped role system those arrays describe.
   useEffect(() => {
     if (!currentUser) return;
-    if (activeTab === 'tenants') {
+    if (activeTab === 'tenants' || activeTab === 'platform-admins') {
       if (!currentUser.isPlatformAdmin) setActiveTab('map');
       return;
     }
@@ -842,6 +849,16 @@ export default function App() {
     setTenants((prev) => [created, ...prev]);
   };
 
+  const handleAddPlatformAdmin = async (email: string) => {
+    const added = await api.platform.admins.add(email);
+    setPlatformAdmins((prev) => [...prev, added]);
+  };
+
+  const handleRemovePlatformAdmin = async (userId: string) => {
+    await api.platform.admins.remove(userId);
+    setPlatformAdmins((prev) => prev.filter((a) => a.userId !== userId));
+  };
+
   const handleUpdateTenant = async (id: string, t: { name?: string; status?: TenantStatus }) => {
     const updated = await api.platform.tenants.update(id, t);
     setTenants((prev) => prev.map((tenant) => (tenant.id === id ? { ...tenant, ...updated } : tenant)));
@@ -1191,6 +1208,20 @@ export default function App() {
               </button>
             )}
 
+            {currentUser.isPlatformAdmin && (
+              <button
+                id="tab-platform-admins"
+                onClick={() => setActiveTab('platform-admins')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'platform-admins'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/10'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4" /> Platform Admins
+              </button>
+            )}
+
             {ROLE_MODULES[currentUser.role].includes('whatsnew') && (
               <button
                 id="tab-whatsnew"
@@ -1276,6 +1307,7 @@ export default function App() {
               {activeTab === 'feedback' && t('header.feedback.title')}
               {activeTab === 'whatsnew' && t('header.whatsnew.title')}
               {activeTab === 'tenants' && 'Tenant Portal'}
+              {activeTab === 'platform-admins' && 'Platform Admins'}
             </h2>
             <p className="text-xs text-slate-500 font-semibold">
               {activeTab === 'map' && t('header.map.subtitle')}
@@ -1291,6 +1323,7 @@ export default function App() {
               {activeTab === 'feedback' && t('header.feedback.subtitle')}
               {activeTab === 'whatsnew' && t('header.whatsnew.subtitle')}
               {activeTab === 'tenants' && 'Every company using Fleet Tracker, in one place.'}
+              {activeTab === 'platform-admins' && 'Who can manage every tenant.'}
             </p>
           </div>
 
@@ -1556,6 +1589,16 @@ export default function App() {
               tenants={tenants}
               onCreateTenant={handleCreateTenant}
               onUpdateTenant={handleUpdateTenant}
+            />
+          )}
+
+          {/* TAB: PLATFORM ADMINS (platform-admin-only) */}
+          {activeTab === 'platform-admins' && currentUser.isPlatformAdmin && (
+            <PlatformAdminsPanel
+              admins={platformAdmins}
+              currentUserId={currentUser.id}
+              onAdd={handleAddPlatformAdmin}
+              onRemove={handleRemovePlatformAdmin}
             />
           )}
 

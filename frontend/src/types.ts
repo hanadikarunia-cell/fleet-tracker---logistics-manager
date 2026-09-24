@@ -192,6 +192,14 @@ export interface AppUser {
   tenantId?: string;
 }
 
+export interface PlatformAdmin {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  tenantName: string | null;
+  createdAt: string;
+}
+
 export type FeedbackStatus = 'new' | 'reviewed' | 'resolved';
 
 export type TenantStatus = 'active' | 'suspended' | 'trial';
