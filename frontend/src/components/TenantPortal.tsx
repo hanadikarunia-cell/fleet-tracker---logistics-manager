@@ -1,11 +1,16 @@
 import { useState, FormEvent } from 'react';
 import { Tenant, TenantStatus } from '../types';
-import { Building2, Plus, Pencil, Users, X } from 'lucide-react';
+import { Building2, Plus, Pencil, Users, Eye, X } from 'lucide-react';
+import TenantUsersModal from './TenantUsersModal';
 
 interface TenantPortalProps {
   tenants: Tenant[];
   onCreateTenant: (t: { name: string; subdomain: string; adminName: string; adminEmail: string; adminPassword: string }) => Promise<void>;
   onUpdateTenant: (id: string, t: { name?: string; status?: TenantStatus }) => Promise<void>;
+  // Opens a read-only monitoring view of the tenant's fleet data.
+  onMonitor: (tenantId: string) => void;
+  // Re-fetch the tenant list (keeps user counts current after accounts are added).
+  onRefresh: () => void;
 }
 
 const statusStyles: Record<TenantStatus, string> = {
@@ -14,9 +19,10 @@ const statusStyles: Record<TenantStatus, string> = {
   trial: 'bg-amber-100 text-amber-700 border-amber-200',
 };
 
-export default function TenantPortal({ tenants, onCreateTenant, onUpdateTenant }: TenantPortalProps) {
+export default function TenantPortal({ tenants, onCreateTenant, onUpdateTenant, onMonitor, onRefresh }: TenantPortalProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
+  const [usersTenant, setUsersTenant] = useState<Tenant | null>(null);
 
   const [formName, setFormName] = useState('');
   const [formSubdomain, setFormSubdomain] = useState('');
@@ -140,7 +146,23 @@ export default function TenantPortal({ tenants, onCreateTenant, onUpdateTenant }
                   </span>
                 </td>
                 <td className="px-5 py-3.5 text-slate-500">{new Date(tenant.createdAt).toLocaleDateString()}</td>
-                <td className="px-5 py-3.5 text-right">
+                <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                  <button
+                    id={`btn-monitor-tenant-${tenant.id}`}
+                    onClick={() => onMonitor(tenant.id)}
+                    className="p-1.5 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg transition cursor-pointer"
+                    title="Monitor tenant (read-only)"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    id={`btn-users-tenant-${tenant.id}`}
+                    onClick={() => setUsersTenant(tenant)}
+                    className="p-1.5 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg transition cursor-pointer"
+                    title="Manage user accounts"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     id={`btn-edit-tenant-${tenant.id}`}
                     onClick={() => startEdit(tenant)}
@@ -269,6 +291,10 @@ export default function TenantPortal({ tenants, onCreateTenant, onUpdateTenant }
             </form>
           </div>
         </div>
+      )}
+
+      {usersTenant && (
+        <TenantUsersModal tenant={usersTenant} onClose={() => setUsersTenant(null)} onUserAdded={onRefresh} />
       )}
 
       {/* EDIT TENANT MODAL */}

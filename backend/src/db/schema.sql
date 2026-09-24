@@ -787,3 +787,26 @@ alter table platform_admins enable row level security;
 -- No policy at all — service-role-only, same posture as app_users/feedback/
 -- device_credentials. Never reachable via the anon/authenticated PostgREST
 -- surface, only the backend's own service-role connection.
+
+-- ---------------------------------------------------------------------------
+-- Platform-only logins + audit trail.
+--
+-- A platform admin can now be a login with NO tenant at all (no app_users row):
+-- name/email live on the platform_admins row itself. Legacy "hybrid" platform
+-- admins (a tenant account that also holds the flag) keep these NULL and read
+-- their identity from app_users. Also service-role-only, no policy.
+alter table platform_admins add column if not exists name text;
+alter table platform_admins add column if not exists email text;
+
+create table if not exists platform_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid,
+  actor_email text,
+  action text not null,
+  tenant_id uuid,
+  target text,
+  details jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists platform_audit_log_created_at_idx on platform_audit_log (created_at desc);
+alter table platform_audit_log enable row level security;

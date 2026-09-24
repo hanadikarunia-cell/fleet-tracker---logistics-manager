@@ -185,11 +185,34 @@ export interface AppUser {
   avatar?: string;
   department?: string;
   isPlatformAdmin?: boolean;
+  // A platform admin with no tenant at all (no fleet role, no tenant data of their own).
+  isPlatformOnly?: boolean;
   // The tenant this session's requests are scoped to — the user's own tenant unless a
-  // platform admin is using the tenant switcher.
-  activeTenantId?: string;
+  // platform admin is monitoring another (read-only); null for a platform-only login that
+  // hasn't picked one.
+  activeTenantId?: string | null;
   activeTenantName?: string | null;
-  tenantId?: string;
+  // The account's own tenant (null for platform-only logins).
+  tenantId?: string | null;
+}
+
+export interface TenantUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  department?: string | null;
+  createdAt: string;
+}
+
+export interface PlatformAuditEntry {
+  id: string;
+  actorEmail: string | null;
+  action: string;
+  tenantName: string | null;
+  target: string | null;
+  details: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 export interface PlatformAdmin {

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { supabase } from '../supabaseClient.js';
 import { toCamel, toCamelList } from '../transform.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireIdentity, requireRole } from '../middleware/auth.js';
 
 export const changelogRouter = Router();
 
@@ -14,7 +14,9 @@ function bumpVersion(current: string, bump: BumpType): string {
   return `${major}.${minor}.${patch + 1}`;
 }
 
-changelogRouter.use(requireAuth);
+// The changelog is platform-wide, not tenant data, so it only needs an identity (a
+// platform-only login has no tenant).
+changelogRouter.use(requireIdentity);
 
 // Any logged-in role can see the changelog / current version.
 changelogRouter.get('/', async (_req, res) => {

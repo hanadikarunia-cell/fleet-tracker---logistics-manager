@@ -1,7 +1,7 @@
 import type {
   Vehicle, GPSDevice, Geofence, FleetAlert, MaintenanceLog,
   DriverPerformance, InventoryItem, InventoryMovement, LocationHistoryPoint, AppUser, Feedback, FeedbackStatus,
-  ChangelogEntry, ChangelogBumpType, Tenant, TenantStatus, PlatformAdmin,
+  ChangelogEntry, ChangelogBumpType, Tenant, TenantStatus, PlatformAdmin, TenantUser, PlatformAuditEntry,
 } from './types';
 import { supabase } from './supabaseClient';
 
@@ -180,10 +180,26 @@ export const api = {
       update: (id: string, t: { name?: string; status?: TenantStatus }) =>
         request<Tenant>(`/api/platform/tenants/${id}`, { method: 'PATCH', body: JSON.stringify(t) }),
     },
+    // Account management for a tenant's users (recovery path) — never its fleet data.
+    tenantUsers: {
+      list: (tenantId: string) => get<TenantUser[]>(`/api/platform/tenants/${tenantId}/users`),
+      create: (tenantId: string, u: { name: string; email: string; role: string; password: string }) =>
+        post<TenantUser>(`/api/platform/tenants/${tenantId}/users`, u),
+      update: (tenantId: string, userId: string, u: { name?: string; role?: string }) =>
+        request<TenantUser>(`/api/platform/tenants/${tenantId}/users/${userId}`, { method: 'PATCH', body: JSON.stringify(u) }),
+      resetPassword: (tenantId: string, userId: string, password: string) =>
+        post<void>(`/api/platform/tenants/${tenantId}/users/${userId}/reset-password`, { password }),
+    },
+    // Records that this platform admin started monitoring a tenant.
+    monitor: (tenantId: string) => post<void>('/api/platform/monitor', { tenantId }),
     admins: {
       list: () => get<PlatformAdmin[]>('/api/platform/admins'),
-      add: (email: string) => post<PlatformAdmin>('/api/platform/admins', { email }),
+      // Creates a platform-only login (no tenant).
+      add: (a: { name: string; email: string; password: string }) => post<PlatformAdmin>('/api/platform/admins', a),
       remove: (userId: string) => del(`/api/platform/admins/${userId}`),
+    },
+    audit: {
+      list: () => get<PlatformAuditEntry[]>('/api/platform/audit'),
     },
   },
   positions: {

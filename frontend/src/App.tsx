@@ -118,17 +118,25 @@ export default function App() {
     supabase?.auth.signOut();
   };
 
-  // Platform-admin tenant switcher. The selection is stored, then the page reloads so every
-  // piece of tenant data is refetched from scratch — nothing from the previous tenant can
-  // linger in state. Picking the admin's own tenant just clears the override.
-  const handleSwitchTenant = (tenantId: string) => {
-    setActiveTenantOverride(tenantId === currentUser?.tenantId ? null : tenantId);
+  // Platform-admin tenant monitor (read-only). The selection is stored, then the page reloads
+  // so every piece of tenant data is refetched from scratch — nothing from the previous
+  // tenant can linger in state. Picking the admin's own tenant, or the empty option, clears
+  // the override. Entering a tenant is logged in the platform audit trail.
+  const handleSwitchTenant = async (tenantId: string) => {
+    const override = tenantId && tenantId !== currentUser?.tenantId ? tenantId : null;
+    if (override) await api.platform.monitor(override).catch((err) => console.error('Failed to log tenant monitor:', err));
+    setActiveTenantOverride(override);
     window.location.reload();
   };
 
+  // A platform-only login has no tenant of its own: until it picks one to monitor it sees
+  // the platform screens only and no fleet data at all.
+  const noTenantContext = !!currentUser?.isPlatformOnly && !currentUser.activeTenantId;
+  const modules: string[] = currentUser && !noTenantContext ? ROLE_MODULES[currentUser.role] : [];
+
   const isActingAsOtherTenant =
     !!currentUser?.isPlatformAdmin && !!currentUser.activeTenantId && currentUser.activeTenantId !== currentUser.tenantId;
-  // Realtime (below) is bound to the admin's HOME tenant by RLS, so while acting as another
+  // Realtime (below) is bound to the admin's HOME tenant by RLS, so while monitoring another
   // tenant its pushes must be dropped rather than mixed into that tenant's data.
   const isActingAsOtherTenantRef = useRef(false);
   isActingAsOtherTenantRef.current = isActingAsOtherTenant;
@@ -213,6 +221,11 @@ export default function App() {
   // carries the auth token and we know which endpoints this account is even allowed to call.
   useEffect(() => {
     if (!currentUser) return;
+    if (noTenantContext) {
+      // Platform-only login with no tenant picked: there is no fleet data to load.
+      setIsLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -376,9 +389,9 @@ export default function App() {
       if (!currentUser.isPlatformAdmin) setActiveTab('map');
       return;
     }
-    const allowed = ROLE_MODULES[currentUser.role] || [];
-    if (!allowed.includes(activeTab)) {
-      setActiveTab(allowed[0] as any);
+    if (!modules.includes(activeTab)) {
+      // A platform-only login with no tenant picked has no fleet tabs at all.
+      setActiveTab(noTenantContext ? 'tenants' : (modules[0] as any));
     }
   }, [currentUser, activeTab]);
 
@@ -849,8 +862,8 @@ export default function App() {
     setTenants((prev) => [created, ...prev]);
   };
 
-  const handleAddPlatformAdmin = async (email: string) => {
-    const added = await api.platform.admins.add(email);
+  const handleAddPlatformAdmin = async (a: { name: string; email: string; password: string }) => {
+    const added = await api.platform.admins.add(a);
     setPlatformAdmins((prev) => [...prev, added]);
   };
 
@@ -952,7 +965,7 @@ export default function App() {
                 <h1 className="font-extrabold text-sm tracking-wider">{t('brand.name')}</h1>
                 <div className="flex items-center gap-1.5">
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                    {currentUser.activeTenantName ?? t('brand.subtitle')}
+                    {currentUser.activeTenantName ?? (currentUser.isPlatformOnly ? 'Platform' : t('brand.subtitle'))}
                   </p>
                   {changelog[0]?.version && (
                     <button
@@ -971,7 +984,7 @@ export default function App() {
             <LanguageToggle dark />
           </div>
 
-          {/* Tenant switcher — platform (app-level) admins only */}
+          {/* Tenant monitor — platform (app-level) admins only. Read-only view of a tenant. */}
           {currentUser.isPlatformAdmin && (
             <div className={`px-5 py-3 border-b border-slate-800 ${isActingAsOtherTenant ? 'bg-amber-500/10' : ''}`}>
               <label
@@ -979,7 +992,7 @@ export default function App() {
                 className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5"
               >
                 <Building2 className="w-3 h-3" />
-                {isActingAsOtherTenant ? 'Acting as tenant' : 'Switch tenant'}
+                {isActingAsOtherTenant ? 'Monitoring tenant (read-only)' : 'Monitor tenant'}
               </label>
               <select
                 id="select-switch-tenant"
@@ -987,8 +1000,9 @@ export default function App() {
                 onChange={(e) => handleSwitchTenant(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 text-white text-xs font-semibold rounded-lg px-2.5 py-2 outline-none focus:border-blue-500"
               >
-                {tenants.length === 0 && (
-                  <option value={currentUser.activeTenantId ?? ''}>{currentUser.activeTenantName ?? '…'}</option>
+                {currentUser.isPlatformOnly && <option value="">— None (platform only) —</option>}
+                {currentUser.activeTenantId && !tenants.some((tn) => tn.id === currentUser.activeTenantId) && (
+                  <option value={currentUser.activeTenantId}>{currentUser.activeTenantName ?? '…'}</option>
                 )}
                 {tenants.map((tn) => (
                   <option key={tn.id} value={tn.id}>
@@ -1000,7 +1014,6 @@ export default function App() {
               </select>
             </div>
           )}
-
           {/* Signed-in Account Widget */}
           <div className="mx-4 mt-2 mb-4 p-2.5 bg-slate-800/80 rounded-xl border border-slate-700/60 flex items-center gap-2">
             {currentUser.avatar ? (
@@ -1018,7 +1031,7 @@ export default function App() {
             <div className="min-w-0 flex-1">
               <p className="text-[10px] font-bold text-slate-100 truncate leading-tight">{currentUser.name}</p>
               <p className="text-[8px] text-blue-400 font-extrabold uppercase tracking-widest mt-0.5">
-                🛡️ {currentUser.role}
+                🛡️ {currentUser.isPlatformOnly ? 'platform admin' : currentUser.role}
               </p>
             </div>
             <button
@@ -1033,7 +1046,7 @@ export default function App() {
 
           {/* Active Tabs Menu */}
           <nav className="p-4 space-y-1">
-            {ROLE_MODULES[currentUser.role].includes('map') && (
+            {modules.includes('map') && (
               <button
                 id="tab-map"
                 onClick={() => setActiveTab('map')}
@@ -1047,7 +1060,7 @@ export default function App() {
               </button>
             )}
 
-            {ROLE_MODULES[currentUser.role].includes('dashboard') && (
+            {modules.includes('dashboard') && (
               <button
                 id="tab-dashboard"
                 onClick={() => setActiveTab('dashboard')}
@@ -1061,7 +1074,7 @@ export default function App() {
               </button>
             )}
 
-            {ROLE_MODULES[currentUser.role].includes('telemetry') && (
+            {modules.includes('telemetry') && (
               <button
                 id="tab-telemetry"
                 onClick={() => setActiveTab('telemetry')}
@@ -1075,7 +1088,7 @@ export default function App() {
               </button>
             )}
 
-            {ROLE_MODULES[currentUser.role].includes('eta') && (
+            {modules.includes('eta') && (
               <button
                 id="tab-eta"
                 onClick={() => setActiveTab('eta')}
@@ -1089,7 +1102,7 @@ export default function App() {
               </button>
             )}
 
-            {ROLE_MODULES[currentUser.role].includes('efficiency') && (
+            {modules.includes('efficiency') && (
               <button
                 id="tab-efficiency"
                 onClick={() => setActiveTab('efficiency')}
@@ -1103,7 +1116,7 @@ export default function App() {
               </button>
             )}
 
-            {ROLE_MODULES[currentUser.role].includes('inventory') && (
+            {modules.includes('inventory') && (
               <button
                 id="tab-inventory"
                 onClick={() => setActiveTab('inventory')}
@@ -1117,7 +1130,7 @@ export default function App() {
               </button>
             )}
 
-            {ROLE_MODULES[currentUser.role].includes('drivers') && (
+            {modules.includes('drivers') && (
               <button
                 id="tab-drivers"
                 onClick={() => setActiveTab('drivers')}
@@ -1131,7 +1144,7 @@ export default function App() {
               </button>
             )}
 
-            {ROLE_MODULES[currentUser.role].includes('vehicles') && (
+            {modules.includes('vehicles') && (
               <button
                 id="tab-vehicles"
                 onClick={() => setActiveTab('vehicles')}
@@ -1145,7 +1158,7 @@ export default function App() {
               </button>
             )}
 
-            {ROLE_MODULES[currentUser.role].includes('devices') && (
+            {modules.includes('devices') && (
               <button
                 id="tab-devices"
                 onClick={() => setActiveTab('devices')}
@@ -1159,7 +1172,7 @@ export default function App() {
               </button>
             )}
 
-            {ROLE_MODULES[currentUser.role].includes('users') && (
+            {modules.includes('users') && (
               <button
                 id="tab-users"
                 onClick={() => setActiveTab('users')}
@@ -1173,7 +1186,7 @@ export default function App() {
               </button>
             )}
 
-            {ROLE_MODULES[currentUser.role].includes('feedback') && (
+            {modules.includes('feedback') && (
               <button
                 id="tab-feedback"
                 onClick={() => setActiveTab('feedback')}
@@ -1222,7 +1235,7 @@ export default function App() {
               </button>
             )}
 
-            {ROLE_MODULES[currentUser.role].includes('whatsnew') && (
+            {modules.includes('whatsnew') && (
               <button
                 id="tab-whatsnew"
                 onClick={() => setActiveTab('whatsnew')}
@@ -1589,6 +1602,8 @@ export default function App() {
               tenants={tenants}
               onCreateTenant={handleCreateTenant}
               onUpdateTenant={handleUpdateTenant}
+              onMonitor={handleSwitchTenant}
+              onRefresh={loadTenants}
             />
           )}
 
