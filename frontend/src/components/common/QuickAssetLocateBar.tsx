@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Search, Truck, ShieldAlert, Smartphone, Boxes, User, MapPin, Navigation, ArrowRight, X } from 'lucide-react';
 import { Vehicle, Geofence, GPSDevice, InventoryItem } from '../../types';
+import { pathLengthMeters } from '../../roadRoute';
 
 interface QuickAssetLocateBarProps {
   vehicles: Vehicle[];
@@ -177,7 +178,7 @@ export default function QuickAssetLocateBar({
                       <span className="font-extrabold text-slate-100 block">{g.name}</span>
                       <span className="text-[10px] text-slate-400 block">
                         {g.type === 'route'
-                          ? `Driver route • ${g.vertices?.length ?? 0} waypoints`
+                          ? `Driver route • ${(pathLengthMeters(g.vertices ?? []) / 1000).toFixed(1)} km`
                           : `Type: ${g.type} • Radius: ${(g.radius / 1000).toFixed(1)} km`}
                       </span>
                     </div>

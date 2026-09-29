@@ -6,6 +6,7 @@ import {
   ChangelogEntry, ChangelogBumpType, Tenant, TenantStatus, PlatformAdmin
 } from './types';
 import { api, setActiveTenantOverride } from './api';
+import { fetchRoadRoute, pathLengthMeters } from './roadRoute';
 import { supabase } from './supabaseClient';
 import LoginScreen from './LoginScreen';
 import MapView from './components/MapView';
@@ -31,7 +32,7 @@ import type { Session } from '@supabase/supabase-js';
 import {
   Map, LayoutDashboard, Boxes, Users, Cpu, Truck,
   Plus, AlertOctagon, Info, Layers, Smartphone, Navigation, Fingerprint,
-  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare, Sparkles, Building2, ShieldCheck, Route as RouteIcon, Undo2, X as XIcon, Check as CheckIcon
+  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare, Sparkles, Building2, ShieldCheck, Route as RouteIcon, Undo2, X as XIcon, Check as CheckIcon, Loader2
 } from 'lucide-react';
 
 export const ROLE_MODULES: Record<UserRole, string[]> = {
@@ -172,6 +173,10 @@ export default function App() {
   const [routeDraftPoints, setRouteDraftPoints] = useState<{ lat: number; lng: number }[]>([]);
   const [showRouteModal, setShowRouteModal] = useState(false);
   const [newTrackName, setNewTrackName] = useState('');
+  // The clicked points, snapped onto real roads (see roadRoute.ts) — null until Finish is
+  // clicked, or if the free routing service couldn't be reached (falls back to straight lines).
+  const [roadSnappedPoints, setRoadSnappedPoints] = useState<{ lat: number; lng: number }[] | null>(null);
+  const [isSnappingRoute, setIsSnappingRoute] = useState(false);
 
   const [soundEnabled, setSoundEnabled] = useState(true);
   const prevAlertsLengthRef = useRef(alerts.length);
@@ -643,35 +648,48 @@ export default function App() {
 
   const handleAddRoutePoint = (lat: number, lng: number) => {
     setRouteDraftPoints((prev) => [...prev, { lat, lng }]);
+    // The clicked points changed, so any already-computed road-snapped path is stale.
+    setRoadSnappedPoints(null);
   };
 
   const handleCancelRoute = () => {
     setIsDrawingRoute(false);
     setRouteDraftPoints([]);
+    setRoadSnappedPoints(null);
   };
 
   const handleUndoRoutePoint = () => {
     setRouteDraftPoints((prev) => prev.slice(0, -1));
+    setRoadSnappedPoints(null);
   };
 
-  const handleFinishRoute = () => {
+  // "Finish" snaps the clicked points onto actual roads (see roadRoute.ts) before naming
+  // the route, so what gets saved follows streets rather than cutting straight lines
+  // between clicks. If the free routing service is unavailable, it falls back to the
+  // straight-line path the user actually clicked rather than blocking route creation.
+  const handleFinishRoute = async () => {
     if (routeDraftPoints.length < 2) return;
+    setIsSnappingRoute(true);
+    const snapped = await fetchRoadRoute(routeDraftPoints);
+    setRoadSnappedPoints(snapped);
+    setIsSnappingRoute(false);
     setNewTrackName(`Driver Route #${geofences.filter((g) => g.type === 'route').length + 1}`);
     setShowRouteModal(true);
   };
 
   const saveCreatedRoute = async () => {
     if (routeDraftPoints.length < 2) return;
+    const vertices = roadSnappedPoints && roadSnappedPoints.length >= 2 ? roadSnappedPoints : routeDraftPoints;
 
     const newRoute: Geofence = {
       id: 'ROUTE-' + String(geofences.length + 1).padStart(2, '0'),
       name: newTrackName || `Driver Route #${geofences.length + 1}`,
-      lat: routeDraftPoints[0].lat,
-      lng: routeDraftPoints[0].lng,
+      lat: vertices[0].lat,
+      lng: vertices[0].lng,
       radius: 0,
       type: 'route',
       active: true,
-      vertices: routeDraftPoints,
+      vertices,
     };
 
     const created = await api.geofences.create(newRoute);
@@ -679,6 +697,7 @@ export default function App() {
     setShowRouteModal(false);
     setIsDrawingRoute(false);
     setRouteDraftPoints([]);
+    setRoadSnappedPoints(null);
   };
 
   const handleUpdateGeofence = async (id: string, patch: Partial<Geofence>) => {
@@ -1465,17 +1484,18 @@ export default function App() {
                     <button
                       id="btn-finish-route"
                       onClick={handleFinishRoute}
-                      disabled={routeDraftPoints.length < 2}
-                      title="Finish route"
+                      disabled={routeDraftPoints.length < 2 || isSnappingRoute}
+                      title={isSnappingRoute ? 'Snapping to roads…' : 'Finish route'}
                       className="p-2 rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 transition"
                     >
-                      <CheckIcon className="w-4 h-4" />
+                      {isSnappingRoute ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}
                     </button>
                     <button
                       id="btn-cancel-route"
                       onClick={handleCancelRoute}
+                      disabled={isSnappingRoute}
                       title="Cancel"
-                      className="p-2 rounded-xl text-white bg-rose-600 hover:bg-rose-700 transition"
+                      className="p-2 rounded-xl text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 transition"
                     >
                       <XIcon className="w-4 h-4" />
                     </button>
@@ -1523,6 +1543,7 @@ export default function App() {
                   isDrawingRoute={isDrawingRoute}
                   onAddRoutePoint={handleAddRoutePoint}
                   routeDraftPoints={routeDraftPoints}
+                  roadSnappedPreview={roadSnappedPoints}
                   onUpdateGeofence={handleUpdateGeofence}
                   onDeleteGeofence={handleDeleteGeofence}
                   onUpdateSettings={(updated) => setMapSettings(prev => ({ ...prev, ...updated }))}
@@ -1864,8 +1885,16 @@ export default function App() {
                 />
               </div>
 
-              <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[11px] text-slate-500 font-medium">
-                <p>{routeDraftPoints.length} waypoints plotted</p>
+              <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[11px] text-slate-500 font-medium space-y-1">
+                <p>
+                  {routeDraftPoints.length} points clicked •{' '}
+                  {((pathLengthMeters(roadSnappedPoints && roadSnappedPoints.length >= 2 ? roadSnappedPoints : routeDraftPoints)) / 1000).toFixed(1)} km
+                </p>
+                {roadSnappedPoints && roadSnappedPoints.length >= 2 ? (
+                  <p className="text-indigo-600 font-semibold">✓ Snapped to roads</p>
+                ) : (
+                  <p className="text-amber-600 font-semibold">Straight-line path — road snapping wasn't available for this route.</p>
+                )}
               </div>
             </div>
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Vehicle, Geofence, LocationHistoryPoint, MapSettings } from '../types';
 import { useLanguage } from '../i18n';
+import { pathLengthMeters } from '../roadRoute';
 import {
   Globe, ShieldAlert, Layers, Navigation, ZoomIn, ZoomOut, Info, Eye, EyeOff,
   Wifi, WifiOff, RefreshCw, Grid, Download, FileText, Maximize2,
@@ -75,6 +76,10 @@ interface MapViewProps {
   isDrawingRoute?: boolean;
   onAddRoutePoint?: (lat: number, lng: number) => void;
   routeDraftPoints?: { lat: number; lng: number }[];
+  // The draft points snapped onto real roads (see roadRoute.ts), once Finish has been
+  // clicked — draws the actual road-following preview instead of straight lines between
+  // the clicked points. null/undefined while still clicking, or if snapping failed.
+  roadSnappedPreview?: { lat: number; lng: number }[] | null;
   onUpdateGeofence?: (id: string, patch: Partial<Geofence>) => void;
   onDeleteGeofence?: (id: string) => void;
   onUpdateSettings?: (updated: Partial<MapSettings>) => void;
@@ -105,6 +110,7 @@ export default function MapView({
   isDrawingRoute = false,
   onAddRoutePoint,
   routeDraftPoints = [],
+  roadSnappedPreview = null,
   onUpdateGeofence,
   onDeleteGeofence,
   onUpdateSettings,
@@ -779,20 +785,24 @@ export default function MapView({
               <span>Driver Route</span>
             </div>
             <p class="font-semibold text-xs text-slate-800">${fence.name}</p>
-            <p class="text-[10px] text-slate-500">${fence.vertices.length} waypoints • ${(distanceM / 1000).toFixed(1)} km</p>
+            <p class="text-[10px] text-slate-500">${(distanceM / 1000).toFixed(1)} km, snapped to roads</p>
           </div>
         `);
         geofencesGroupRef.current?.addLayer(line);
-        fence.vertices.forEach((v, i) => {
+        // Just the endpoints — a road-snapped route can carry hundreds of geometry points,
+        // and a marker per point would be pure clutter (and slow) for no benefit.
+        const first = fence.vertices[0];
+        const last = fence.vertices[fence.vertices.length - 1];
+        for (const v of [first, last]) {
           const marker = L.circleMarker([v.lat, v.lng], {
-            radius: 4,
+            radius: 5,
             color: '#4F46E5',
-            fillColor: i === 0 || i === fence.vertices!.length - 1 ? '#4F46E5' : '#C7D2FE',
+            fillColor: '#4F46E5',
             fillOpacity: 1,
             weight: 2,
           });
           geofencesGroupRef.current?.addLayer(marker);
-        });
+        }
         return;
       }
 
@@ -838,7 +848,16 @@ export default function MapView({
       routeDraftGroupRef.current?.addLayer(marker);
     });
 
-    if (routeDraftPoints.length >= 2) {
+    // Once Finish has snapped the clicks onto real roads, draw THAT path (solid) instead of
+    // the straight dashed line between the raw clicks — the clicks are just anchor points.
+    if (roadSnappedPreview && roadSnappedPreview.length >= 2) {
+      const snappedLine = L.polyline(roadSnappedPreview.map((p) => [p.lat, p.lng] as [number, number]), {
+        color: '#4F46E5', // Indigo 600 — matches how a saved route renders
+        weight: 4,
+        opacity: 0.85,
+      });
+      routeDraftGroupRef.current?.addLayer(snappedLine);
+    } else if (routeDraftPoints.length >= 2) {
       const line = L.polyline(routeDraftPoints.map((p) => [p.lat, p.lng] as [number, number]), {
         color: '#F59E0B',
         weight: 3,
@@ -846,7 +865,7 @@ export default function MapView({
       });
       routeDraftGroupRef.current?.addLayer(line);
     }
-  }, [isDrawingRoute, routeDraftPoints]);
+  }, [isDrawingRoute, routeDraftPoints, roadSnappedPreview]);
 
   // 6. Render Location History Polyline
   useEffect(() => {
@@ -1763,7 +1782,7 @@ export default function MapView({
                         <span className="font-bold text-slate-800">{g.name}</span>
                         <span className="text-[10px] text-slate-500 block">
                           {g.type === 'route'
-                            ? `Driver route • ${g.vertices?.length ?? 0} waypoints`
+                            ? `Driver route • ${(pathLengthMeters(g.vertices ?? []) / 1000).toFixed(1)} km`
                             : `Lat: ${g.lat.toFixed(4)}, Lng: ${g.lng.toFixed(4)} • Radius: ${(g.radius / 1000).toFixed(1)} km`}
                         </span>
                       </div>
