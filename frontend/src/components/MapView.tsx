@@ -7,7 +7,7 @@ import {
   Wifi, WifiOff, RefreshCw, Grid, Download, FileText, Maximize2,
   Share2, Check, Copy, MapPin, X, FileSpreadsheet, Code, ShieldCheck, Compass, Sparkles,
   CloudRain, CloudLightning, Wind, AlertTriangle, Radio, Zap,
-  Ruler, RotateCcw, Trash2, Plus, Minus, Crosshair, Route as RouteIcon
+  Ruler, RotateCcw, Trash2, Plus, Minus, Crosshair, Route as RouteIcon, Edit3
 } from 'lucide-react';
 
 // Real current precipitation per vehicle, fetched from Open-Meteo (free, no API key) — see
@@ -75,6 +75,8 @@ interface MapViewProps {
   isDrawingRoute?: boolean;
   onAddRoutePoint?: (lat: number, lng: number) => void;
   routeDraftPoints?: { lat: number; lng: number }[];
+  onUpdateGeofence?: (id: string, patch: Partial<Geofence>) => void;
+  onDeleteGeofence?: (id: string) => void;
   onUpdateSettings?: (updated: Partial<MapSettings>) => void;
 }
 
@@ -103,6 +105,8 @@ export default function MapView({
   isDrawingRoute = false,
   onAddRoutePoint,
   routeDraftPoints = [],
+  onUpdateGeofence,
+  onDeleteGeofence,
   onUpdateSettings,
 }: MapViewProps) {
   const { t } = useLanguage();
@@ -123,6 +127,10 @@ export default function MapView({
   const [showZoomMenu, setShowZoomMenu] = useState(false);
   const [showExportStateModal, setShowExportStateModal] = useState(false);
   const [showGeofenceExportModal, setShowGeofenceExportModal] = useState(false);
+  const [editingGeofenceId, setEditingGeofenceId] = useState<string | null>(null);
+  const [editGeofenceName, setEditGeofenceName] = useState('');
+  const [editGeofenceRadius, setEditGeofenceRadius] = useState(1000);
+  const [editGeofenceActive, setEditGeofenceActive] = useState(true);
   const [copiedState, setCopiedState] = useState(false);
   const [copiedGeofence, setCopiedGeofence] = useState(false);
   const [offlineSimulate, setOfflineSimulate] = useState(false);
@@ -1696,22 +1704,103 @@ export default function MapView({
 
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
               <span className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">{t('map.configuredGeofences')} ({geofences.length})</span>
-              <div className="divide-y divide-slate-200/60 max-h-48 overflow-y-auto pr-1">
+              <div className="divide-y divide-slate-200/60 max-h-64 overflow-y-auto pr-1">
                 {geofences.map(g => (
-                  <div key={g.id} className="py-2 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="font-bold text-slate-800">{g.name}</span>
-                      <span className="text-[10px] text-slate-500 block">
-                        {g.type === 'route'
-                          ? `Driver route • ${g.vertices?.length ?? 0} waypoints`
-                          : `Lat: ${g.lat.toFixed(4)}, Lng: ${g.lng.toFixed(4)} • Radius: ${(g.radius / 1000).toFixed(1)} km`}
-                      </span>
+                  editingGeofenceId === g.id ? (
+                    <div key={g.id} className="py-2.5 space-y-2 text-xs">
+                      <div className="flex flex-col gap-1">
+                        <label className="font-semibold text-slate-600 text-[10px]">{t('map.editGeofenceName')}</label>
+                        <input
+                          type="text"
+                          value={editGeofenceName}
+                          onChange={(e) => setEditGeofenceName(e.target.value)}
+                          className="p-1.5 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      {g.type !== 'route' && (
+                        <div className="flex flex-col gap-1">
+                          <label className="font-semibold text-slate-600 text-[10px]">{t('map.editGeofenceRadius')}</label>
+                          <input
+                            type="number"
+                            min={100}
+                            value={editGeofenceRadius}
+                            onChange={(e) => setEditGeofenceRadius(Number(e.target.value))}
+                            className="p-1.5 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      )}
+                      <label className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-600">
+                        <input type="checkbox" checked={editGeofenceActive} onChange={(e) => setEditGeofenceActive(e.target.checked)} />
+                        {t('map.editGeofenceActive')}
+                      </label>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingGeofenceId(null)}
+                          className="px-3 py-1.5 border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-100 transition cursor-pointer"
+                        >
+                          {t('common.cancel')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onUpdateGeofence?.(g.id, {
+                              name: editGeofenceName,
+                              active: editGeofenceActive,
+                              ...(g.type !== 'route' ? { radius: editGeofenceRadius } : {}),
+                            });
+                            setEditingGeofenceId(null);
+                          }}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition cursor-pointer"
+                        >
+                          {t('map.saveChanges')}
+                        </button>
+                      </div>
                     </div>
-                    <span className={`px-2 py-0.5 text-[9px] font-extrabold rounded-full ${g.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
-                      {g.active ? t('map.activeZone') : t('map.inactive')}
-                    </span>
-                  </div>
+                  ) : (
+                    <div key={g.id} className="py-2 flex items-center justify-between text-xs gap-2">
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-800">{g.name}</span>
+                        <span className="text-[10px] text-slate-500 block">
+                          {g.type === 'route'
+                            ? `Driver route • ${g.vertices?.length ?? 0} waypoints`
+                            : `Lat: ${g.lat.toFixed(4)}, Lng: ${g.lng.toFixed(4)} • Radius: ${(g.radius / 1000).toFixed(1)} km`}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`px-2 py-0.5 text-[9px] font-extrabold rounded-full ${g.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>
+                          {g.active ? t('map.activeZone') : t('map.inactive')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingGeofenceId(g.id);
+                            setEditGeofenceName(g.name);
+                            setEditGeofenceRadius(g.radius);
+                            setEditGeofenceActive(g.active);
+                          }}
+                          className="p-1 hover:bg-blue-100 text-slate-400 hover:text-blue-600 rounded-lg transition cursor-pointer"
+                          title={t('map.editGeofence')}
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(t('map.deleteGeofenceConfirm'))) onDeleteGeofence?.(g.id);
+                          }}
+                          className="p-1 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
+                          title={t('map.deleteGeofence')}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )
                 ))}
+                {geofences.length === 0 && (
+                  <p className="text-[11px] text-slate-400 font-semibold py-3 text-center">—</p>
+                )}
               </div>
             </div>
 

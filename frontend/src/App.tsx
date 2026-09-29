@@ -681,6 +681,16 @@ export default function App() {
     setRouteDraftPoints([]);
   };
 
+  const handleUpdateGeofence = async (id: string, patch: Partial<Geofence>) => {
+    const updated = await api.geofences.update(id, patch);
+    setGeofences((prev) => prev.map((g) => (g.id === id ? updated : g)));
+  };
+
+  const handleDeleteGeofence = async (id: string) => {
+    await api.geofences.remove(id);
+    setGeofences((prev) => prev.filter((g) => g.id !== id));
+  };
+
   // VEHICLE OPERATIONS
   const handleAddDriverPerformance = async (
     newDriver: DriverPerformance,
@@ -1513,6 +1523,8 @@ export default function App() {
                   isDrawingRoute={isDrawingRoute}
                   onAddRoutePoint={handleAddRoutePoint}
                   routeDraftPoints={routeDraftPoints}
+                  onUpdateGeofence={handleUpdateGeofence}
+                  onDeleteGeofence={handleDeleteGeofence}
                   onUpdateSettings={(updated) => setMapSettings(prev => ({ ...prev, ...updated }))}
                 />
               </div>
