@@ -176,7 +176,9 @@ export default function QuickAssetLocateBar({
                     <div>
                       <span className="font-extrabold text-slate-100 block">{g.name}</span>
                       <span className="text-[10px] text-slate-400 block">
-                        Type: {g.type} • Radius: {(g.radius / 1000).toFixed(1)} km
+                        {g.type === 'route'
+                          ? `Driver route • ${g.vertices?.length ?? 0} waypoints`
+                          : `Type: ${g.type} • Radius: ${(g.radius / 1000).toFixed(1)} km`}
                       </span>
                     </div>
                   </div>

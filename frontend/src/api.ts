@@ -150,6 +150,7 @@ export const api = {
       post<AppUser>('/api/users', u),
     update: (id: string, u: Partial<AppUser>) => put<AppUser>(`/api/users/${id}`, u),
     remove: (id: string) => del(`/api/users/${id}`),
+    resetPassword: (id: string, password: string) => post<void>(`/api/users/${id}/reset-password`, { password }),
   },
   auth: {
     me: () => get<AppUser>('/api/auth/me'),

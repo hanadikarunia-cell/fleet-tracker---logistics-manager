@@ -31,7 +31,7 @@ import type { Session } from '@supabase/supabase-js';
 import {
   Map, LayoutDashboard, Boxes, Users, Cpu, Truck,
   Plus, AlertOctagon, Info, Layers, Smartphone, Navigation, Fingerprint,
-  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare, Sparkles, Building2, ShieldCheck
+  Volume2, VolumeX, Activity, Clock, ShieldAlert, LogOut, MessageSquare, Sparkles, Building2, ShieldCheck, Route as RouteIcon, Undo2, X as XIcon, Check as CheckIcon
 } from 'lucide-react';
 
 export const ROLE_MODULES: Record<UserRole, string[]> = {
@@ -165,6 +165,13 @@ export default function App() {
   const [pendingGeofenceCoords, setPendingGeofenceCoords] = useState<{ lat: number, lng: number } | null>(null);
   const [newFenceName, setNewFenceName] = useState('');
   const [newFenceRadius, setNewFenceRadius] = useState(1000);
+
+  // Driver route/track drawing — multi-click (unlike geofence drawing, which completes on
+  // the first click), so it needs its own draft state until the operator hits Finish.
+  const [isDrawingRoute, setIsDrawingRoute] = useState(false);
+  const [routeDraftPoints, setRouteDraftPoints] = useState<{ lat: number; lng: number }[]>([]);
+  const [showRouteModal, setShowRouteModal] = useState(false);
+  const [newTrackName, setNewTrackName] = useState('');
 
   const [soundEnabled, setSoundEnabled] = useState(true);
   const prevAlertsLengthRef = useRef(alerts.length);
@@ -592,6 +599,9 @@ export default function App() {
 
   // GEOFENCE OPERATIONS
   const triggerAddGeofenceMode = () => {
+    // Drawing modes are mutually exclusive — starting one cancels any route in progress.
+    setIsDrawingRoute(false);
+    setRouteDraftPoints([]);
     setIsDrawingGeofence(true);
     setActiveTab('map');
   };
@@ -620,6 +630,55 @@ export default function App() {
     setShowGeofenceModal(false);
     setPendingGeofenceCoords(null);
     setIsDrawingGeofence(false);
+  };
+
+  // DRIVER ROUTE/TRACK OPERATIONS — a plotted path (unlike a geofence, it never triggers
+  // enter/exit alerts) for a driver to follow, e.g. through a specific corridor.
+  const triggerDrawRouteMode = () => {
+    setIsDrawingGeofence(false);
+    setIsDrawingRoute(true);
+    setRouteDraftPoints([]);
+    setActiveTab('map');
+  };
+
+  const handleAddRoutePoint = (lat: number, lng: number) => {
+    setRouteDraftPoints((prev) => [...prev, { lat, lng }]);
+  };
+
+  const handleCancelRoute = () => {
+    setIsDrawingRoute(false);
+    setRouteDraftPoints([]);
+  };
+
+  const handleUndoRoutePoint = () => {
+    setRouteDraftPoints((prev) => prev.slice(0, -1));
+  };
+
+  const handleFinishRoute = () => {
+    if (routeDraftPoints.length < 2) return;
+    setNewTrackName(`Driver Route #${geofences.filter((g) => g.type === 'route').length + 1}`);
+    setShowRouteModal(true);
+  };
+
+  const saveCreatedRoute = async () => {
+    if (routeDraftPoints.length < 2) return;
+
+    const newRoute: Geofence = {
+      id: 'ROUTE-' + String(geofences.length + 1).padStart(2, '0'),
+      name: newTrackName || `Driver Route #${geofences.length + 1}`,
+      lat: routeDraftPoints[0].lat,
+      lng: routeDraftPoints[0].lng,
+      radius: 0,
+      type: 'route',
+      active: true,
+      vertices: routeDraftPoints,
+    };
+
+    const created = await api.geofences.create(newRoute);
+    setGeofences((prev) => [...prev, created]);
+    setShowRouteModal(false);
+    setIsDrawingRoute(false);
+    setRouteDraftPoints([]);
   };
 
   // VEHICLE OPERATIONS
@@ -854,6 +913,10 @@ export default function App() {
   const handleDeleteUser = async (userId: string) => {
     await api.users.remove(userId);
     setUsers((prev) => prev.filter((user) => user.id !== userId));
+  };
+
+  const handleResetUserPassword = async (userId: string, password: string) => {
+    await api.users.resetPassword(userId, password);
   };
 
   // --- TENANT PORTAL (platform-admin-only, backend-enforced) ---
@@ -1367,6 +1430,48 @@ export default function App() {
                   <Plus className="w-4 h-4" /> {isDrawingGeofence ? 'Click Map...' : 'Draw Geofence zone'}
                 </button>
 
+                {!isDrawingRoute ? (
+                  <button
+                    id="btn-draw-route"
+                    onClick={triggerDrawRouteMode}
+                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200"
+                  >
+                    <RouteIcon className="w-4 h-4" /> Draw Route for Driver
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-600 text-white shadow-lg">
+                      {routeDraftPoints.length} point{routeDraftPoints.length === 1 ? '' : 's'}
+                    </span>
+                    <button
+                      id="btn-undo-route-point"
+                      onClick={handleUndoRoutePoint}
+                      disabled={routeDraftPoints.length === 0}
+                      title="Undo last point"
+                      className="p-2 rounded-xl text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 disabled:opacity-40 transition"
+                    >
+                      <Undo2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      id="btn-finish-route"
+                      onClick={handleFinishRoute}
+                      disabled={routeDraftPoints.length < 2}
+                      title="Finish route"
+                      className="p-2 rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 transition"
+                    >
+                      <CheckIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      id="btn-cancel-route"
+                      onClick={handleCancelRoute}
+                      title="Cancel"
+                      className="p-2 rounded-xl text-white bg-rose-600 hover:bg-rose-700 transition"
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
                 {selectedVehicle && (
                   <button
                     id="btn-toggle-history"
@@ -1405,6 +1510,9 @@ export default function App() {
                   onAddGeofenceClick={handleMapClickForGeofence}
                   isDrawingGeofence={isDrawingGeofence}
                   onDrawGeofenceComplete={() => setIsDrawingGeofence(false)}
+                  isDrawingRoute={isDrawingRoute}
+                  onAddRoutePoint={handleAddRoutePoint}
+                  routeDraftPoints={routeDraftPoints}
                   onUpdateSettings={(updated) => setMapSettings(prev => ({ ...prev, ...updated }))}
                 />
               </div>
@@ -1593,6 +1701,7 @@ export default function App() {
               onAddUser={handleAddUser}
               onUpdateUserRole={handleUpdateUserRole}
               onDeleteUser={handleDeleteUser}
+              onResetUserPassword={handleResetUserPassword}
             />
           )}
 
@@ -1709,6 +1818,59 @@ export default function App() {
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition"
               >
                 Establish Zone
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- DRIVER ROUTE CREATION CONFIRMATION MODAL --- */}
+      {showRouteModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 animate-scale-up border border-slate-100">
+            <div className="flex gap-3 text-slate-800">
+              <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl h-fit">
+                <RouteIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900">Name This Route</h3>
+                <p className="text-xs text-slate-500 mt-0.5">A plotted track for a driver to follow — it never triggers alerts on its own.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="flex flex-col gap-1">
+                <label className="font-semibold text-slate-600">Route Name</label>
+                <input
+                  id="modal-route-name"
+                  type="text"
+                  required
+                  value={newTrackName}
+                  onChange={(e) => setNewTrackName(e.target.value)}
+                  placeholder="e.g. Priok Port Access Corridor"
+                  className="p-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[11px] text-slate-500 font-medium">
+                <p>{routeDraftPoints.length} waypoints plotted</p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 text-xs pt-2">
+              <button
+                id="route-modal-btn-cancel"
+                onClick={() => setShowRouteModal(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-50 transition"
+              >
+                Back
+              </button>
+              <button
+                id="route-modal-btn-save"
+                onClick={saveCreatedRoute}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg transition"
+              >
+                Save Route
               </button>
             </div>
           </div>

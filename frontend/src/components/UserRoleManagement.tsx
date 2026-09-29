@@ -12,6 +12,7 @@ interface UserRoleManagementProps {
   onAddUser: (user: { name: string; email: string; role: UserRole; department?: string; password: string }) => Promise<void>;
   onUpdateUserRole: (userId: string, newRole: UserRole) => void;
   onDeleteUser: (userId: string) => void;
+  onResetUserPassword: (userId: string, password: string) => Promise<void>;
 }
 
 export default function UserRoleManagement({
@@ -19,7 +20,8 @@ export default function UserRoleManagement({
   usersList,
   onAddUser,
   onUpdateUserRole,
-  onDeleteUser
+  onDeleteUser,
+  onResetUserPassword
 }: UserRoleManagementProps) {
   const [showAddUserModal, setShowAddUserModal] = useState(false);
 
@@ -137,9 +139,40 @@ export default function UserRoleManagement({
     }, 1500);
   };
 
+  // --- RESET ANOTHER OPERATOR'S PASSWORD (admin-only) ---
+  const [resettingUser, setResettingUser] = useState<AppUser | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!resettingUser) return;
+    setResetError(null);
+    if (resetPassword.length < 8) {
+      setResetError('Password must be at least 8 characters.');
+      return;
+    }
+    setIsResetting(true);
+    try {
+      await onResetUserPassword(resettingUser.id, resetPassword);
+      setResetSuccess(true);
+      setResetPassword('');
+      setTimeout(() => {
+        setResettingUser(null);
+        setResetSuccess(false);
+      }, 1500);
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'Failed to reset password.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      
+
       {/* 1. SIGNED-IN ACCOUNT SUMMARY */}
       <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-5 rounded-2xl text-white shadow-md border border-slate-800 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -339,6 +372,15 @@ export default function UserRoleManagement({
                         </select>
 
                         <button
+                          id={`btn-reset-password-${user.id}`}
+                          onClick={() => { setResetError(null); setResetSuccess(false); setResetPassword(''); setResettingUser(user); }}
+                          className="text-slate-400 hover:text-indigo-600 p-1 rounded-lg hover:bg-indigo-50 transition"
+                          title="Reset Password"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
                           id={`btn-delete-operator-${user.id}`}
                           onClick={() => onDeleteUser(user.id)}
                           className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition"
@@ -526,6 +568,61 @@ export default function UserRoleManagement({
                   className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold rounded-lg transition"
                 >
                   {changingPassword ? 'Updating…' : 'Update Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- RESET OPERATOR PASSWORD MODAL --- */}
+      {resettingUser && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 animate-scale-up border border-slate-100">
+            <div className="flex gap-3 text-slate-800">
+              <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl h-fit">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900">Reset Password</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Sets a new password for {resettingUser.name} ({resettingUser.email}). They'll need it to sign in next.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleResetSubmit} className="space-y-3.5 text-xs">
+              <div className="flex flex-col gap-1">
+                <label className="font-semibold text-slate-600">New Password</label>
+                <input
+                  type="text"
+                  required
+                  minLength={8}
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  className="p-2.5 border border-slate-200 rounded-lg text-slate-800 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <p className="text-[10px] text-slate-400">Share this with them directly.</p>
+              </div>
+
+              {resetError && <p className="text-rose-600 font-semibold">{resetError}</p>}
+              {resetSuccess && <p className="text-emerald-600 font-semibold">Password reset.</p>}
+
+              <div className="flex justify-end gap-2 text-xs pt-3">
+                <button
+                  type="button"
+                  onClick={() => setResettingUser(null)}
+                  className="px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isResetting}
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold rounded-lg transition"
+                >
+                  {isResetting ? 'Resetting…' : 'Reset Password'}
                 </button>
               </div>
             </form>

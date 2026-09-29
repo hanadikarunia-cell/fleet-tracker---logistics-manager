@@ -4,7 +4,7 @@ export interface GeofenceRow {
   lat: number;
   lng: number;
   radius: number;
-  type: 'circle' | 'polygon';
+  type: 'circle' | 'polygon' | 'route';
   active: boolean;
   vertices?: Array<{ lat: number; lng: number }> | null;
 }
@@ -39,6 +39,9 @@ function isInsidePolygon(lat: number, lng: number, vertices: Array<{ lat: number
 }
 
 export function isInsideGeofence(lat: number, lng: number, fence: GeofenceRow): boolean {
+  // A 'route' is a plotted driver track, not an alert-triggering area — it never
+  // participates in enter/exit detection.
+  if (fence.type === 'route') return false;
   if (fence.type === 'polygon' && fence.vertices && fence.vertices.length >= 3) {
     return isInsidePolygon(lat, lng, fence.vertices);
   }

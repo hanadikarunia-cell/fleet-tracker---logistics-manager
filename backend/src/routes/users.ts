@@ -73,6 +73,31 @@ usersRouter.put('/:id', async (req, res) => {
   res.json(toCamel(data));
 });
 
+// Lets a tenant admin reset one of their own operators' passwords directly (e.g. the
+// operator is locked out and can't use Supabase's own "forgot password" email flow).
+// Self-service password changes go through supabase.auth.updateUser on the frontend
+// instead — this is specifically for resetting SOMEONE ELSE's password.
+usersRouter.post('/:id/reset-password', async (req, res) => {
+  const password = req.body?.password;
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+
+  // Ownership check BEFORE the auth call — auth.admin.updateUserById has no tenant concept.
+  const { data: target, error: lookupError } = await supabase
+    .from('app_users')
+    .select('id')
+    .eq('id', req.params.id)
+    .eq('tenant_id', req.tenantId)
+    .maybeSingle();
+  if (lookupError) return res.status(500).json({ error: lookupError.message });
+  if (!target) return res.status(404).json({ error: 'Not found' });
+
+  const { error } = await supabase.auth.admin.updateUserById(target.id, { password });
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(204).send();
+});
+
 usersRouter.delete('/:id', async (req, res) => {
   if (req.params.id === req.user!.id) {
     return res.status(400).json({ error: 'You cannot delete your own account' });

@@ -7,7 +7,7 @@ import {
   Wifi, WifiOff, RefreshCw, Grid, Download, FileText, Maximize2,
   Share2, Check, Copy, MapPin, X, FileSpreadsheet, Code, ShieldCheck, Compass, Sparkles,
   CloudRain, CloudLightning, Wind, AlertTriangle, Radio, Zap,
-  Ruler, RotateCcw, Trash2, Plus, Minus, Crosshair
+  Ruler, RotateCcw, Trash2, Plus, Minus, Crosshair, Route as RouteIcon
 } from 'lucide-react';
 
 // Real current precipitation per vehicle, fetched from Open-Meteo (free, no API key) — see
@@ -70,6 +70,11 @@ interface MapViewProps {
   onAddGeofenceClick: (lat: number, lng: number) => void;
   isDrawingGeofence: boolean;
   onDrawGeofenceComplete: () => void;
+  // Driver route/track drawing — multi-click, so unlike geofence drawing it does NOT
+  // auto-complete after one click; the caller (App.tsx) decides when a route is finished.
+  isDrawingRoute?: boolean;
+  onAddRoutePoint?: (lat: number, lng: number) => void;
+  routeDraftPoints?: { lat: number; lng: number }[];
   onUpdateSettings?: (updated: Partial<MapSettings>) => void;
 }
 
@@ -95,6 +100,9 @@ export default function MapView({
   onAddGeofenceClick,
   isDrawingGeofence,
   onDrawGeofenceComplete,
+  isDrawingRoute = false,
+  onAddRoutePoint,
+  routeDraftPoints = [],
   onUpdateSettings,
 }: MapViewProps) {
   const { t } = useLanguage();
@@ -108,6 +116,7 @@ export default function MapView({
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const weatherCellsGroupRef = useRef<L.LayerGroup | null>(null);
   const measureGroupRef = useRef<L.LayerGroup | null>(null);
+  const routeDraftGroupRef = useRef<L.LayerGroup | null>(null);
 
   const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
   const [showLayerMenu, setShowLayerMenu] = useState(false);
@@ -199,11 +208,15 @@ export default function MapView({
   const isDrawingGeofenceRef = useRef(isDrawingGeofence);
   const onAddGeofenceClickRef = useRef(onAddGeofenceClick);
   const onDrawGeofenceCompleteRef = useRef(onDrawGeofenceComplete);
+  const isDrawingRouteRef = useRef(isDrawingRoute);
+  const onAddRoutePointRef = useRef(onAddRoutePoint);
   useEffect(() => {
     isDrawingGeofenceRef.current = isDrawingGeofence;
     onAddGeofenceClickRef.current = onAddGeofenceClick;
     onDrawGeofenceCompleteRef.current = onDrawGeofenceComplete;
-  }, [isDrawingGeofence, onAddGeofenceClick, onDrawGeofenceComplete]);
+    isDrawingRouteRef.current = isDrawingRoute;
+    onAddRoutePointRef.current = onAddRoutePoint;
+  }, [isDrawingGeofence, onAddGeofenceClick, onDrawGeofenceComplete, isDrawingRoute, onAddRoutePoint]);
 
   // 1. Initialize Map
   useEffect(() => {
@@ -226,6 +239,7 @@ export default function MapView({
     geofencesGroupRef.current = L.layerGroup().addTo(map);
     historyGroupRef.current = L.layerGroup().addTo(map);
     measureGroupRef.current = L.layerGroup().addTo(map);
+    routeDraftGroupRef.current = L.layerGroup().addTo(map);
 
     // Add scale control
     L.control.scale({ position: 'bottomright' }).addTo(map);
@@ -234,6 +248,10 @@ export default function MapView({
     map.on('click', (e: L.LeafletMouseEvent) => {
       if (isMeasuringDistanceRef.current) {
         setMeasurePoints((prev) => [...prev, { lat: e.latlng.lat, lng: e.latlng.lng }]);
+        return;
+      }
+      if (isDrawingRouteRef.current) {
+        onAddRoutePointRef.current?.(e.latlng.lat, e.latlng.lng);
         return;
       }
       if (isDrawingGeofenceRef.current) {
@@ -730,6 +748,46 @@ export default function MapView({
     geofences.forEach((fence) => {
       if (!fence.active) return;
 
+      // A 'route' is a plotted driver track (a line), not an alert-triggering area (a
+      // circle) — rendered and described differently, and never fires enter/exit alerts.
+      if (fence.type === 'route') {
+        if (!fence.vertices || fence.vertices.length < 2) return;
+        const latlngs = fence.vertices.map((v) => [v.lat, v.lng] as [number, number]);
+        const line = L.polyline(latlngs, {
+          color: '#4F46E5', // Indigo 600
+          weight: 4,
+          opacity: 0.85,
+        });
+        let distanceM = 0;
+        for (let i = 1; i < fence.vertices.length; i++) {
+          distanceM += computeDistanceMeters(
+            fence.vertices[i - 1].lat, fence.vertices[i - 1].lng,
+            fence.vertices[i].lat, fence.vertices[i].lng
+          );
+        }
+        line.bindPopup(`
+          <div class="p-1 font-sans">
+            <div class="flex items-center gap-1 text-indigo-600 font-semibold text-sm mb-1">
+              <span>Driver Route</span>
+            </div>
+            <p class="font-semibold text-xs text-slate-800">${fence.name}</p>
+            <p class="text-[10px] text-slate-500">${fence.vertices.length} waypoints • ${(distanceM / 1000).toFixed(1)} km</p>
+          </div>
+        `);
+        geofencesGroupRef.current?.addLayer(line);
+        fence.vertices.forEach((v, i) => {
+          const marker = L.circleMarker([v.lat, v.lng], {
+            radius: 4,
+            color: '#4F46E5',
+            fillColor: i === 0 || i === fence.vertices!.length - 1 ? '#4F46E5' : '#C7D2FE',
+            fillOpacity: 1,
+            weight: 2,
+          });
+          geofencesGroupRef.current?.addLayer(marker);
+        });
+        return;
+      }
+
       const circle = L.circle([fence.lat, fence.lng], {
         radius: fence.radius,
         color: '#F43F5E', // Rose 500
@@ -753,6 +811,34 @@ export default function MapView({
       geofencesGroupRef.current?.addLayer(circle);
     });
   }, [geofences, settings.showGeofences]);
+
+  // 5b. Render the in-progress route draft (live preview while plotting a driver track)
+  useEffect(() => {
+    if (!mapRef.current || !routeDraftGroupRef.current) return;
+    routeDraftGroupRef.current.clearLayers();
+    if (!isDrawingRoute || routeDraftPoints.length === 0) return;
+
+    routeDraftPoints.forEach((p, i) => {
+      const marker = L.circleMarker([p.lat, p.lng], {
+        radius: 5,
+        color: '#F59E0B', // Amber 500
+        fillColor: '#FCD34D',
+        fillOpacity: 1,
+        weight: 2,
+      });
+      marker.bindTooltip(`${i + 1}`, { permanent: true, direction: 'top', offset: [0, -6], className: 'font-bold' });
+      routeDraftGroupRef.current?.addLayer(marker);
+    });
+
+    if (routeDraftPoints.length >= 2) {
+      const line = L.polyline(routeDraftPoints.map((p) => [p.lat, p.lng] as [number, number]), {
+        color: '#F59E0B',
+        weight: 3,
+        dashArray: '6, 6',
+      });
+      routeDraftGroupRef.current?.addLayer(line);
+    }
+  }, [isDrawingRoute, routeDraftPoints]);
 
   // 6. Render Location History Polyline
   useEffect(() => {
@@ -821,6 +907,10 @@ export default function MapView({
 
     if (target === 'all' || target === 'geofences') {
       geofences.forEach(g => {
+        if (g.type === 'route' && g.vertices?.length) {
+          g.vertices.forEach((v) => points.push(L.latLng(v.lat, v.lng)));
+          return;
+        }
         if (g.lat && g.lng) {
           points.push(L.latLng(g.lat, g.lng));
           // Estimate bounding box padding for geofence radius
@@ -911,7 +1001,8 @@ export default function MapView({
         active: g.active,
         lat: g.lat,
         lng: g.lng,
-        radiusMeters: g.radius,
+        radiusMeters: g.type === 'route' ? undefined : g.radius,
+        waypoints: g.type === 'route' ? g.vertices : undefined,
       })),
     };
   };
@@ -929,39 +1020,63 @@ export default function MapView({
   };
 
   // --- HANDLER: EXPORT GEOFENCES ---
-  const handleExportGeofencesGeoJson = () => {
-    const geoJson = {
-      type: 'FeatureCollection',
-      exportedAt: new Date().toISOString(),
-      features: geofences.map(g => ({
+  // A 'route' exports as a LineString through its waypoints; a circle/polygon area still
+  // exports as its center Point (unchanged from before routes existed).
+  const geofenceToFeature = (g: Geofence) => {
+    if (g.type === 'route' && g.vertices && g.vertices.length >= 2) {
+      return {
         type: 'Feature',
         id: g.id,
         geometry: {
-          type: 'Point',
-          coordinates: [g.lng, g.lat],
+          type: 'LineString',
+          coordinates: g.vertices.map((v) => [v.lng, v.lat]),
         },
         properties: {
           id: g.id,
           name: g.name,
-          radiusMeters: g.radius,
-          radiusKm: Number((g.radius / 1000).toFixed(2)),
           type: g.type,
+          waypointCount: g.vertices.length,
           active: g.active,
         },
-      })),
+      };
+    }
+    return {
+      type: 'Feature',
+      id: g.id,
+      geometry: {
+        type: 'Point',
+        coordinates: [g.lng, g.lat],
+      },
+      properties: {
+        id: g.id,
+        name: g.name,
+        radiusMeters: g.radius,
+        radiusKm: Number((g.radius / 1000).toFixed(2)),
+        type: g.type,
+        active: g.active,
+      },
+    };
+  };
+
+  const handleExportGeofencesGeoJson = () => {
+    const geoJson = {
+      type: 'FeatureCollection',
+      exportedAt: new Date().toISOString(),
+      features: geofences.map(geofenceToFeature),
     };
     downloadFile(JSON.stringify(geoJson, null, 2), `fleet_geofences_${new Date().toISOString().slice(0, 10)}.geojson`, 'application/geo+json');
   };
 
   const handleExportGeofencesCsv = () => {
-    const headers = ['id', 'name', 'latitude', 'longitude', 'radius_meters', 'radius_km', 'type', 'active'];
+    const headers = ['id', 'name', 'latitude', 'longitude', 'radius_meters', 'radius_km', 'waypoint_count', 'type', 'active'];
     const rows = geofences.map(g => [
       `"${g.id}"`,
       `"${g.name.replace(/"/g, '""')}"`,
       g.lat,
       g.lng,
-      g.radius,
-      (g.radius / 1000).toFixed(2),
+      g.type === 'route' ? '' : g.radius,
+      g.type === 'route' ? '' : (g.radius / 1000).toFixed(2),
+      g.type === 'route' ? (g.vertices?.length ?? 0) : '',
       `"${g.type}"`,
       g.active ? 'true' : 'false'
     ]);
@@ -972,21 +1087,7 @@ export default function MapView({
   const handleCopyGeofenceGeoJson = () => {
     const geoJson = {
       type: 'FeatureCollection',
-      features: geofences.map(g => ({
-        type: 'Feature',
-        id: g.id,
-        geometry: {
-          type: 'Point',
-          coordinates: [g.lng, g.lat],
-        },
-        properties: {
-          id: g.id,
-          name: g.name,
-          radiusMeters: g.radius,
-          type: g.type,
-          active: g.active,
-        },
-      })),
+      features: geofences.map(geofenceToFeature),
     };
     navigator.clipboard.writeText(JSON.stringify(geoJson, null, 2));
     setCopiedGeofence(true);
@@ -1022,6 +1123,16 @@ export default function MapView({
           <div className="bg-rose-500 text-white px-3 py-2 rounded-xl shadow-lg flex items-center gap-2 text-xs font-semibold backdrop-blur pointer-events-auto border border-rose-400 animate-bounce">
             <ShieldAlert className="w-4 h-4" />
             <span>{t('map.drawingAlert')}</span>
+          </div>
+        )}
+
+        {/* Route Drawing Alert */}
+        {isDrawingRoute && (
+          <div className="bg-amber-500 text-white px-3 py-2 rounded-xl shadow-lg flex items-center gap-2 text-xs font-semibold backdrop-blur pointer-events-auto border border-amber-400">
+            <RouteIcon className="w-4 h-4" />
+            <span>
+              Click the map to plot the route ({routeDraftPoints.length} point{routeDraftPoints.length === 1 ? '' : 's'} so far)
+            </span>
           </div>
         )}
 
@@ -1591,7 +1702,9 @@ export default function MapView({
                     <div>
                       <span className="font-bold text-slate-800">{g.name}</span>
                       <span className="text-[10px] text-slate-500 block">
-                        Lat: {g.lat.toFixed(4)}, Lng: {g.lng.toFixed(4)} • Radius: {(g.radius / 1000).toFixed(1)} km
+                        {g.type === 'route'
+                          ? `Driver route • ${g.vertices?.length ?? 0} waypoints`
+                          : `Lat: ${g.lat.toFixed(4)}, Lng: ${g.lng.toFixed(4)} • Radius: ${(g.radius / 1000).toFixed(1)} km`}
                       </span>
                     </div>
                     <span className={`px-2 py-0.5 text-[9px] font-extrabold rounded-full ${g.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}`}>

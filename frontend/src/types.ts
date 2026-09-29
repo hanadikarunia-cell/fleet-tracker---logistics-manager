@@ -1,6 +1,9 @@
 export type VehicleStatus = 'active' | 'idle' | 'stopped' | 'maintenance' | 'offline';
 export type DeviceStatus = 'online' | 'offline' | 'low_battery';
-export type GeofenceType = 'circle' | 'polygon';
+// 'route' is a driver track: a plotted path (vertices), not an alert-triggering area — see
+// the "Draw Route for Driver" tool on the map. radius/lat/lng are still set (first waypoint)
+// for list/sort compatibility, but rendering and alerts treat it as a line, not a circle.
+export type GeofenceType = 'circle' | 'polygon' | 'route';
 export type MaintenanceStatus = 'scheduled' | 'overdue' | 'completed';
 export type CategoryType = 'Electronics' | 'Spare Parts' | 'Cargo' | 'Tools' | 'Hazmat' | string;
 
