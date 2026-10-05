@@ -2,4 +2,9 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-path name="my_images" path="." />
     <cache-path name="my_cache_images" path="." />
+    <!-- Where UpdateInstaller (see its own Java file) downloads a new APK to, via
+         DownloadManager.Request#setDestinationInExternalFilesDir — needs its own
+         FileProvider entry so a content:// URI can be minted for it when handing the file
+         to the system package installer. -->
+    <external-files-path name="downloads" path="Downloads/" />
 </paths>

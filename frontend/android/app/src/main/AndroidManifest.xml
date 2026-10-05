@@ -58,4 +58,12 @@
          foreground service is required to display; requested at runtime via
          @capacitor/local-notifications when tracking starts (see TrackerPage.tsx). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- In-app update (UpdateInstaller.java): lets the app ask the user to allow it to
+         install an APK it downloaded itself. Declaring this does NOT grant it — Android
+         still makes the user flip it on once, per app, in its own Settings screen
+         (ACTION_MANAGE_UNKNOWN_APP_SOURCES), and still shows its own install-confirmation
+         dialog every time. Neither of those can be skipped from here; this permission just
+         makes it possible to ask. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

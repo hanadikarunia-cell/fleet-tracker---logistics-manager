@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "1.2.0",
-  "downloadUrl": "https://github.com/hanadikarunia-cell/fleet-tracker---logistics-manager/releases/download/android-v1.2.0/app-debug.apk",
-  "notes": "GPS tracking now keeps running even if you swipe the app away, not just when it's backgrounded. The pairing screen also has an in-app QR scanner now."
+  "versionCode": 4,
+  "versionName": "1.3.0",
+  "downloadUrl": "https://github.com/hanadikarunia-cell/fleet-tracker---logistics-manager/releases/download/android-v1.3.0/app-debug.apk",
+  "notes": "Updating the app no longer means finding a download link yourself — tap Update Now and the app downloads it and opens the installer for you."
 }

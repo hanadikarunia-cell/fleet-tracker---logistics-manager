@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
-import { Navigation, ShieldCheck, ChevronRight, Download, X } from 'lucide-react';
+import { UpdateInstaller } from './updateInstaller';
+import { Navigation, ShieldCheck, ChevronRight, Download, X, Settings, AlertTriangle, Loader2 } from 'lucide-react';
 
 // This is the Android app's actual home screen (server.url points here) — a single
 // APK serving both audiences instead of two separate installs. Plain <a href> full-page
@@ -18,6 +19,13 @@ interface ApkVersionInfo {
   notes?: string;
 }
 
+const isNative = Capacitor.isNativePlatform();
+
+// 'downloading' covers both the download itself and the brief gap before Android's own
+// install dialog appears — there's no in-app progress bar; Android's download notification
+// already shows real progress, so duplicating that here would just be two progress bars.
+type UpdatePhase = 'idle' | 'downloading' | 'needs_permission' | 'installing' | 'error';
+
 export default function AppLauncherPage() {
   // Update check — native only. Everything served through app.html/track.html/index.html
   // already updates itself on every page load (it's just the live site); this is
@@ -29,9 +37,11 @@ export default function AppLauncherPage() {
   // version-name strings.
   const [updateInfo, setUpdateInfo] = useState<ApkVersionInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [phase, setPhase] = useState<UpdatePhase>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
+    if (!isNative) return;
     let cancelled = false;
     (async () => {
       try {
@@ -51,6 +61,39 @@ export default function AppLauncherPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isNative) return;
+    const handle = UpdateInstaller.addListener('updateStatus', ({ phase: next, message }) => {
+      setPhase(next);
+      setErrorMessage(message ?? null);
+    });
+    return () => {
+      handle.then((h) => h.remove());
+    };
+  }, []);
+
+  const handleUpdateNow = async () => {
+    if (!updateInfo) return;
+    setErrorMessage(null);
+    setPhase('downloading');
+    try {
+      await UpdateInstaller.downloadAndInstall({ url: updateInfo.downloadUrl });
+    } catch (err) {
+      setPhase('error');
+      setErrorMessage(err instanceof Error ? err.message : 'Could not start the download.');
+    }
+  };
+
+  const handleContinueInstall = async () => {
+    setErrorMessage(null);
+    try {
+      await UpdateInstaller.retryInstall();
+    } catch (err) {
+      setPhase('error');
+      setErrorMessage(err instanceof Error ? err.message : 'Install permission is still off.');
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-5 bg-slate-950 text-white">
@@ -107,8 +150,8 @@ export default function AppLauncherPage() {
               <div className="min-w-0 flex-1">
                 <h3 className="font-extrabold text-sm">Update Available</h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Version {updateInfo.versionName} is ready. This app's shell doesn't update itself the way its
-                  content does — download it once to get the latest.
+                  Version {updateInfo.versionName} is ready. Tap Update Now to download and install it — you'll
+                  only need to confirm Android's own install prompt at the end.
                 </p>
               </div>
               <button onClick={() => setDismissed(true)} className="text-slate-500 hover:text-white shrink-0 cursor-pointer">
@@ -120,6 +163,29 @@ export default function AppLauncherPage() {
               <p className="text-[11px] text-slate-300 bg-slate-800/60 border border-slate-700 rounded-xl p-3">{updateInfo.notes}</p>
             )}
 
+            {phase === 'needs_permission' && (
+              <div className="flex items-start gap-2 p-3 bg-amber-950 border border-amber-800 rounded-xl text-xs text-amber-300">
+                <Settings className="w-4 h-4 shrink-0 mt-0.5" />
+                <div>
+                  Downloaded. Android opened a settings screen — turn on "Allow from this source" for Fleet
+                  Tracker, then come back here and tap Continue Install.
+                </div>
+              </div>
+            )}
+
+            {phase === 'installing' && (
+              <div className="flex items-center gap-2 p-3 bg-emerald-950 border border-emerald-800 rounded-xl text-xs text-emerald-300">
+                <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                Opening the installer — confirm Install on the screen that appears.
+              </div>
+            )}
+
+            {phase === 'error' && errorMessage && (
+              <div className="flex items-start gap-2 p-3 bg-rose-950 border border-rose-800 rounded-xl text-xs text-rose-300">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {errorMessage}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button
                 onClick={() => setDismissed(true)}
@@ -127,16 +193,40 @@ export default function AppLauncherPage() {
               >
                 Later
               </button>
-              <a
-                href={updateInfo.downloadUrl}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => setDismissed(true)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold rounded-lg transition"
-              >
-                <Download className="w-3.5 h-3.5" /> Download Update
-              </a>
+              {phase === 'needs_permission' ? (
+                <button
+                  onClick={handleContinueInstall}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold rounded-lg transition"
+                >
+                  Continue Install
+                </button>
+              ) : (
+                <button
+                  onClick={handleUpdateNow}
+                  disabled={phase === 'downloading' || phase === 'installing'}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-extrabold rounded-lg transition"
+                >
+                  {phase === 'downloading' ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Downloading…
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" /> Update Now
+                    </>
+                  )}
+                </button>
+              )}
             </div>
+
+            <a
+              href={updateInfo.downloadUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-center text-[10px] text-slate-500 hover:text-slate-300 underline underline-offset-2"
+            >
+              Having trouble? Download the file manually instead
+            </a>
           </div>
         </div>
       )}
