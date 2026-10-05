@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { Navigation, Play, Square, AlertTriangle, CheckCircle2, QrCode } from 'lucide-react';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+import type { BackgroundGeolocationPlugin } from '@capacitor-community/background-geolocation';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { Navigation, Play, Square, AlertTriangle, CheckCircle2, QrCode, Settings } from 'lucide-react';
 import { api, ApiError } from './api';
 
 const SEND_INTERVAL_MS = 7000;
+
+// On the web (testing in a browser) this plugin has no native counterpart and every call
+// rejects — only ever invoked behind an isNative check below, never on the web fallback
+// path. See capacitor.config.ts for the Android setup (useLegacyBridge, native HTTP) this
+// plugin needs to keep working past 5 minutes in the background.
+const BackgroundGeolocation = registerPlugin<BackgroundGeolocationPlugin>('BackgroundGeolocation');
 
 interface LiveReading {
   lat: number;
@@ -18,6 +27,8 @@ interface LogEntry {
   ok: boolean;
   message: string;
 }
+
+const isNative = Capacitor.isNativePlatform();
 
 export default function TrackerPage() {
   const [deviceId, setDeviceId] = useState(() => localStorage.getItem('tracker_device_id') || 'GPS-101');
@@ -38,6 +49,7 @@ export default function TrackerPage() {
 
   const readingRef = useRef<LiveReading | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const bgWatcherIdRef = useRef<string | null>(null);
   const intervalIdRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -116,28 +128,76 @@ export default function TrackerPage() {
   };
 
   const startTracking = () => {
-    if (!('geolocation' in navigator)) {
-      setGeoError('This browser does not support geolocation.');
-      return;
-    }
     setGeoError(null);
 
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        const next: LiveReading = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          speedKmh: pos.coords.speed ? Math.max(0, pos.coords.speed * 3.6) : 0,
-          heading: pos.coords.heading ?? 0,
-          accuracy: pos.coords.accuracy,
-          capturedAt: pos.timestamp,
-        };
-        readingRef.current = next;
-        setReading(next);
-      },
-      (err) => setGeoError(err.message),
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
-    );
+    if (isNative) {
+      // Android 13+ needs this for the foreground service's "tracking active"
+      // notification to actually show. Best-effort: if it's denied the service still
+      // runs and location still reports, the notification just might not appear.
+      LocalNotifications.requestPermissions().catch(() => {});
+
+      // Giving backgroundMessage/backgroundTitle is what makes this plugin keep
+      // delivering fixes with the screen off or the app minimized — without them it
+      // behaves like plain foreground-only geolocation. The ongoing notification it
+      // puts up is required by Android for a location foreground service; it isn't
+      // an error.
+      BackgroundGeolocation.addWatcher(
+        {
+          backgroundTitle: 'Fleet Tracker is active',
+          backgroundMessage: 'Sending this phone’s location. Tap Stop Tracking in the app to end this.',
+          requestPermissions: true,
+          stale: false,
+        },
+        (location, error) => {
+          if (error) {
+            setGeoError(
+              error.code === 'NOT_AUTHORIZED'
+                ? 'Location permission wasn’t granted. Open Settings and allow location — choose "Allow all the time" so tracking keeps working with the screen off.'
+                : error.message
+            );
+            return;
+          }
+          if (!location) return;
+          const next: LiveReading = {
+            lat: location.latitude,
+            lng: location.longitude,
+            speedKmh: location.speed ? Math.max(0, location.speed * 3.6) : 0,
+            heading: location.bearing ?? 0,
+            accuracy: location.accuracy,
+            capturedAt: location.time ?? Date.now(),
+          };
+          readingRef.current = next;
+          setReading(next);
+        }
+      )
+        .then((id) => {
+          bgWatcherIdRef.current = id;
+        })
+        .catch((err) => {
+          setGeoError(err instanceof Error ? err.message : 'Failed to start background location tracking.');
+        });
+    } else {
+      if (!('geolocation' in navigator)) {
+        setGeoError('This browser does not support geolocation.');
+        return;
+      }
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          const next: LiveReading = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            speedKmh: pos.coords.speed ? Math.max(0, pos.coords.speed * 3.6) : 0,
+            heading: pos.coords.heading ?? 0,
+            accuracy: pos.coords.accuracy,
+            capturedAt: pos.timestamp,
+          };
+          readingRef.current = next;
+          setReading(next);
+        },
+        (err) => setGeoError(err.message),
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+      );
+    }
 
     intervalIdRef.current = window.setInterval(sendCurrentPosition, SEND_INTERVAL_MS);
     setIsTracking(true);
@@ -145,8 +205,12 @@ export default function TrackerPage() {
 
   const stopTracking = () => {
     if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    if (bgWatcherIdRef.current !== null) {
+      BackgroundGeolocation.removeWatcher({ id: bgWatcherIdRef.current }).catch(() => {});
+    }
     if (intervalIdRef.current !== null) window.clearInterval(intervalIdRef.current);
     watchIdRef.current = null;
+    bgWatcherIdRef.current = null;
     intervalIdRef.current = null;
     setIsTracking(false);
   };
@@ -262,8 +326,18 @@ export default function TrackerPage() {
         </button>
 
         {geoError && (
-          <div className="flex items-start gap-2 p-3 bg-rose-950 border border-rose-800 rounded-xl text-xs text-rose-300">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {geoError}
+          <div className="flex flex-col gap-2 p-3 bg-rose-950 border border-rose-800 rounded-xl text-xs text-rose-300">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {geoError}
+            </div>
+            {isNative && (
+              <button
+                onClick={() => BackgroundGeolocation.openSettings()}
+                className="flex items-center gap-1.5 self-start text-[10px] font-bold text-rose-200 hover:text-white underline underline-offset-2 cursor-pointer"
+              >
+                <Settings className="w-3 h-3" /> Open Location Settings
+              </button>
+            )}
           </div>
         )}
 
@@ -289,9 +363,17 @@ export default function TrackerPage() {
         )}
 
         {isTracking && (
-          <p className="text-center text-[11px] text-slate-400">
-            Sending a position every {SEND_INTERVAL_MS / 1000}s · {pingCount} sent
-          </p>
+          <div className="text-center space-y-1">
+            <p className="text-[11px] text-slate-400">
+              Sending a position every {SEND_INTERVAL_MS / 1000}s · {pingCount} sent
+            </p>
+            {isNative && (
+              <p className="text-[10px] text-slate-500">
+                Keeps running with the screen off — you'll see a "Fleet Tracker is active" notification while
+                it's on. That's expected, not an error.
+              </p>
+            )}
+          </div>
         )}
 
         {log.length > 0 && (

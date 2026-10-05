@@ -39,9 +39,23 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- The tracker page (reachable from this app's chooser screen) calls the standard
-         Geolocation Web API directly — Capacitor's WebView bridge handles the runtime
-         permission prompt for it, but only once these are declared. No
-         @capacitor/geolocation plugin needed for that API to work. -->
+         Geolocation Web API directly on the web — Capacitor's WebView bridge handles the
+         runtime permission prompt for it, but only once these are declared. On Android,
+         tracking instead goes through @capacitor-community/background-geolocation (see
+         TrackerPage.tsx) so it keeps running with the screen off; these two permissions
+         still cover the initial foreground fix either way. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Background location tracking (@capacitor-community/background-geolocation). The
+         plugin's own manifest declares the <service> and most of these, but they're
+         listed here explicitly too so the requirement is visible in this repo rather than
+         buried in a dependency, and so a manifest-merge quirk can't silently drop one. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Android 13+ requires this to show the "tracking active" notification the
+         foreground service is required to display; requested at runtime via
+         @capacitor/local-notifications when tracking starts (see TrackerPage.tsx). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

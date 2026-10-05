@@ -1,0 +1,6 @@
+{
+  "versionCode": 2,
+  "versionName": "1.1.0",
+  "downloadUrl": "https://github.com/hanadikarunia-cell/fleet-tracker---logistics-manager/releases/download/android-v1.1.0/app-debug.apk",
+  "notes": "GPS tracking now keeps running with the screen off, and the app can tell you when a new version like this one is available."
+}

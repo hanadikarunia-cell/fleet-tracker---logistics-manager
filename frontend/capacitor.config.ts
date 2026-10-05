@@ -16,6 +16,21 @@ const config: CapacitorConfig = {
     url: 'https://frontend-drab-eight-64.vercel.app/app.html',
     cleartext: false,
   },
+  // Background location tracking (see TrackerPage.tsx's use of
+  // @capacitor-community/background-geolocation) needs two things on Android to keep
+  // working past ~5 minutes in the background, straight from that plugin's own setup
+  // notes: the legacy bridge (otherwise location updates silently stop after 5 minutes)
+  // and native HTTP (otherwise the WebView's own networking gets throttled once
+  // backgrounded, so position pings would stop reaching the backend even though the GPS
+  // fix itself kept arriving).
+  android: {
+    useLegacyBridge: true,
+  },
+  plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
+  },
 };
 
 export default config;
