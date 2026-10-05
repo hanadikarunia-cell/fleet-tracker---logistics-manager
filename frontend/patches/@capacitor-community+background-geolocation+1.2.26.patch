@@ -1,0 +1,372 @@
+diff --git a/node_modules/@capacitor-community/background-geolocation/android/src/main/AndroidManifest.xml b/node_modules/@capacitor-community/background-geolocation/android/src/main/AndroidManifest.xml
+index 9e65984..909612f 100644
+--- a/node_modules/@capacitor-community/background-geolocation/android/src/main/AndroidManifest.xml
++++ b/node_modules/@capacitor-community/background-geolocation/android/src/main/AndroidManifest.xml
+@@ -1,9 +1,14 @@
+ <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+     <application>
++        <!-- FLEET TRACKER PATCH: stopWithTask="false" added so the service survives the
++             app being swiped away from Recents (belt-and-suspenders alongside the Java
++             changes in BackgroundGeolocationService/BackgroundGeolocation, which are what
++             actually stop it from tearing itself down in that case). -->
+         <service
+             android:name="com.equimaps.capacitor_background_geolocation.BackgroundGeolocationService"
+             android:enabled="true"
+             android:exported="true"
++            android:stopWithTask="false"
+             android:foregroundServiceType="location" />
+     </application>
+ 
+diff --git a/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocation.java b/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocation.java
+index a92fcf9..a28a2c0 100644
+--- a/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocation.java
++++ b/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocation.java
+@@ -196,6 +196,26 @@ public class BackgroundGeolocation extends Plugin {
+         call.resolve();
+     }
+ 
++    // FLEET TRACKER PATCH (see frontend/patches/ and BackgroundGeolocationService.java's
++    // class comment): lets JS hand the service what it needs to upload positions on its
++    // own, once, before relying on it to keep working after the app's own screen is gone.
++    @PluginMethod()
++    public void configureUpload(PluginCall call) {
++        String apiUrl = call.getString("apiUrl");
++        String deviceId = call.getString("deviceId");
++        String deviceToken = call.getString("deviceToken");
++        if (apiUrl == null || deviceId == null || deviceToken == null) {
++            call.reject("apiUrl, deviceId, and deviceToken are all required.");
++            return;
++        }
++        if (service == null) {
++            call.reject("Service not running.");
++            return;
++        }
++        service.configureUpload(apiUrl, deviceId, deviceToken);
++        call.resolve();
++    }
++
+     @PluginMethod()
+     public void openSettings(PluginCall call) {
+         Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+@@ -262,6 +282,21 @@ public class BackgroundGeolocation extends Plugin {
+         }
+     }
+ 
++    // FLEET TRACKER PATCH: the result of each throttled native upload (see
++    // BackgroundGeolocationService#maybeUploadLocation), forwarded to JS as a plugin event
++    // so the UI's ping count / activity log stay accurate even though the POST itself no
++    // longer happens in JS. Only reaches JS while the app is actually open to receive it;
++    // uploads still happen regardless, this is purely a UI notification.
++    private class UploadResultReceiver extends BroadcastReceiver {
++        @Override
++        public void onReceive(Context context, Intent intent) {
++            JSObject data = new JSObject();
++            data.put("success", intent.getBooleanExtra("success", false));
++            data.put("message", intent.getStringExtra("message"));
++            notifyListeners("uploadResult", data);
++        }
++    }
++
+     // Gets the identifier of the app's resource by name, returning 0 if not found.
+     private int getAppResourceIdentifier(String name, String defType) {
+         return getContext().getResources().getIdentifier(
+@@ -319,6 +354,11 @@ public class BackgroundGeolocation extends Plugin {
+                 new ServiceReceiver(),
+                 new IntentFilter(BackgroundGeolocationService.ACTION_BROADCAST)
+         );
++
++        LocalBroadcastManager.getInstance(this.getContext()).registerReceiver(
++                new UploadResultReceiver(),
++                new IntentFilter(BackgroundGeolocationService.ACTION_UPLOAD_RESULT)
++        );
+     }
+ 
+     @Override
+@@ -337,11 +377,14 @@ public class BackgroundGeolocation extends Plugin {
+         super.handleOnPause();
+     }
+ 
++    // FLEET TRACKER PATCH: this used to call service.stopService() here, which is exactly
++    // what stopped tracking the moment the app was swiped away from Recents (that's when
++    // handleOnDestroy fires) — the whole point of this patch is for tracking to survive
++    // that, so this is now a no-op. The service only stops when removeWatcher is actually
++    // called (the user pressing Stop Tracking) — see
++    // BackgroundGeolocationService.LocalBinder#removeWatcher.
+     @Override
+     protected void handleOnDestroy() {
+-        if (service != null) {
+-            service.stopService();
+-        }
+         super.handleOnDestroy();
+     }
+ }
+diff --git a/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java b/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java
+index fafbb86..ad5ca8b 100644
+--- a/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java
++++ b/node_modules/@capacitor-community/background-geolocation/android/src/main/java/com/equimaps/capacitor_background_geolocation/BackgroundGeolocationService.java
+@@ -2,8 +2,9 @@ package com.equimaps.capacitor_background_geolocation;
+ 
+ import android.app.Notification;
+ import android.app.Service;
++import android.content.Context;
+ import android.content.Intent;
+-import android.content.pm.ServiceInfo;
++import android.content.SharedPreferences;
+ import android.location.Location;
+ import android.os.Binder;
+ import android.os.Build;
+@@ -17,18 +18,62 @@ import com.google.android.gms.location.LocationRequest;
+ import com.google.android.gms.location.LocationResult;
+ import com.google.android.gms.location.LocationServices;
+ 
++import java.io.OutputStream;
++import java.net.HttpURLConnection;
++import java.net.URL;
++import java.text.SimpleDateFormat;
++import java.util.Date;
+ import java.util.HashSet;
++import java.util.Locale;
++import java.util.TimeZone;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
++import java.nio.charset.StandardCharsets;
++import org.json.JSONObject;
+ 
+ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+ 
+ // A bound and started service that is promoted to a foreground service
+ // (showing a persistent notification) when the first background watcher is
+ // added, and demoted when the last background watcher is removed.
++//
++// FLEET TRACKER PATCH (see frontend/patches/): two changes from upstream —
++//
++// 1. This service used to stop itself as soon as the Capacitor bridge
++//    unbound from it (onUnbind) or was destroyed (the plugin's
++//    handleOnDestroy called stopService()) — both of which happen when the
++//    app is swiped away from Android's Recents screen, not just
++//    backgrounded. That made tracking stop the moment the app was closed,
++//    not just minimized. This service is now also independently *started*
++//    (not only bound), onUnbind no longer tears anything down, and
++//    handleOnDestroy (see BackgroundGeolocation.java) no longer calls
++//    stopService() — so it keeps running, and keeps the process alive,
++//    after the app's own screen is gone.
++// 2. Once the app's screen is gone there is no WebView/JS left to call the
++//    backend — so this service now POSTs each position straight to
++//    /api/positions itself, in plain Java, throttled the same way the web
++//    fallback path throttles it (SEND_INTERVAL_MS). The three things that
++//    POST needs (the API base URL, the device ID, and the device's bearer
++//    token) are handed to it once from JS via configureUpload() and kept in
++//    SharedPreferences so they survive the OS restarting this service after
++//    a low-memory kill, independent of whether the app itself ever reopens.
+ public class BackgroundGeolocationService extends Service {
+     static final String ACTION_BROADCAST = (
+             BackgroundGeolocationService.class.getPackage().getName() + ".broadcast"
+     );
++    // A second broadcast — distinct from ACTION_BROADCAST above (which carries a raw
++    // location to whichever JS watcher callback is waiting on it) — reporting the result
++    // of each throttled upload attempt, so the app's UI (ping count, activity log) stays
++    // accurate even though the actual POST no longer happens in JS.
++    static final String ACTION_UPLOAD_RESULT = (
++            BackgroundGeolocationService.class.getPackage().getName() + ".upload_result"
++    );
++    private static final String PREFS_NAME = "capacitor_background_geolocation_upload";
++    private static final long UPLOAD_INTERVAL_MS = 7000;
++
+     private final IBinder binder = new LocalBinder();
++    private final ExecutorService uploadExecutor = Executors.newSingleThreadExecutor();
++    private volatile long lastUploadAttemptAt = 0;
+ 
+     // Must be unique for this application.
+     private static final int NOTIFICATION_ID = 28351;
+@@ -47,17 +92,10 @@ public class BackgroundGeolocationService extends Service {
+         return binder;
+     }
+ 
+-    // Some devices allow a foreground service to outlive the application's main
+-    // activity, leading to nasty crashes as reported in issue #59. If we learn
+-    // that the application has been killed, all watchers are stopped and the
+-    // service is terminated immediately.
++    // See the class comment above (patch note 1) — this used to stop every watcher and
++    // call stopSelf() here, which is exactly what killed tracking on app swipe-away.
+     @Override
+     public boolean onUnbind(Intent intent) {
+-        for (Watcher watcher : watchers) {
+-            watcher.client.removeLocationUpdates(watcher.locationCallback);
+-        }
+-        watchers = new HashSet<Watcher>();
+-        stopSelf();
+         return false;
+     }
+ 
+@@ -70,6 +108,92 @@ public class BackgroundGeolocationService extends Service {
+         return null;
+     }
+ 
++    private SharedPreferences prefs() {
++        return getApplicationContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
++    }
++
++    // Called once from JS (see BackgroundGeolocation.java#configureUpload) when tracking
++    // starts, while the app still has this information. Persisted so this service can keep
++    // uploading even across a system-initiated restart that happens with no app/JS alive to
++    // call this again.
++    void configureUpload(String apiUrl, String deviceId, String deviceToken) {
++        prefs().edit()
++                .putString("apiUrl", apiUrl)
++                .putString("deviceId", deviceId)
++                .putString("deviceToken", deviceToken)
++                .apply();
++    }
++
++    private static String isoTimestamp(long epochMillis) {
++        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
++        format.setTimeZone(TimeZone.getTimeZone("UTC"));
++        return format.format(new Date(epochMillis));
++    }
++
++    // Throttled to UPLOAD_INTERVAL_MS, same cadence the web fallback path uses — this is
++    // the ONLY place a position gets POSTed when running as a background watcher (JS no
++    // longer does it itself; see TrackerPage.tsx), so there is exactly one upload path
++    // whether the app is open, backgrounded, or fully closed.
++    private void maybeUploadLocation(Location location) {
++        long now = System.currentTimeMillis();
++        if (now - lastUploadAttemptAt < UPLOAD_INTERVAL_MS) return;
++        lastUploadAttemptAt = now;
++
++        SharedPreferences prefs = prefs();
++        final String apiUrl = prefs.getString("apiUrl", null);
++        final String deviceId = prefs.getString("deviceId", null);
++        final String deviceToken = prefs.getString("deviceToken", null);
++        if (apiUrl == null || deviceId == null || deviceToken == null) return;
++
++        final double lat = location.getLatitude();
++        final double lng = location.getLongitude();
++        final float speedMs = location.hasSpeed() ? location.getSpeed() : 0f;
++        final float bearing = location.hasBearing() ? location.getBearing() : 0f;
++        final long time = location.getTime();
++
++        uploadExecutor.execute(() -> {
++            boolean success = false;
++            String message;
++            try {
++                JSONObject body = new JSONObject();
++                body.put("device_id", deviceId);
++                body.put("lat", lat);
++                body.put("lng", lng);
++                body.put("speed", speedMs * 3.6); // m/s -> km/h, matching the web fallback path
++                body.put("heading", bearing);
++                body.put("timestamp", isoTimestamp(time));
++
++                URL url = new URL(apiUrl + "/api/positions");
++                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
++                try {
++                    conn.setRequestMethod("POST");
++                    conn.setRequestProperty("Content-Type", "application/json");
++                    conn.setRequestProperty("Authorization", "Bearer " + deviceToken);
++                    conn.setConnectTimeout(15000);
++                    conn.setReadTimeout(15000);
++                    conn.setDoOutput(true);
++                    try (OutputStream os = conn.getOutputStream()) {
++                        os.write(body.toString().getBytes(StandardCharsets.UTF_8));
++                    }
++                    int status = conn.getResponseCode();
++                    success = status >= 200 && status < 300;
++                    message = success ? "Sent (" + String.format(Locale.US, "%.5f", lat) + ", "
++                            + String.format(Locale.US, "%.5f", lng) + ")" : "Server returned " + status;
++                } finally {
++                    conn.disconnect();
++                }
++            } catch (Exception e) {
++                message = e.getMessage() != null ? e.getMessage() : "Failed to send";
++                Logger.error("Background position upload failed", e);
++            }
++
++            Intent intent = new Intent(ACTION_UPLOAD_RESULT);
++            intent.putExtra("success", success);
++            intent.putExtra("message", message);
++            LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
++        });
++    }
++
+     // Handles requests from the activity.
+     public class LocalBinder extends Binder {
+         void addWatcher(
+@@ -96,6 +220,9 @@ public class BackgroundGeolocationService extends Service {
+                     LocalBroadcastManager.getInstance(
+                             getApplicationContext()
+                     ).sendBroadcast(intent);
++                    if (location != null) {
++                        maybeUploadLocation(location);
++                    }
+                 }
+                 @Override
+                 public void onLocationAvailability(LocationAvailability availability) {
+@@ -132,6 +259,15 @@ public class BackgroundGeolocationService extends Service {
+             // each time a background watcher is added.
+             if (backgroundNotification != null) {
+                 try {
++                    // Also start (not just bind) the service — see the class comment (patch
++                    // note 1). A bound-only service is torn down as soon as its last client
++                    // unbinds; a started one keeps running independently of that.
++                    Intent selfIntent = new Intent(BackgroundGeolocationService.this, BackgroundGeolocationService.class);
++                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
++                        BackgroundGeolocationService.this.startForegroundService(selfIntent);
++                    } else {
++                        BackgroundGeolocationService.this.startService(selfIntent);
++                    }
+                     // This method has been known to fail due to weird
+                     // permission bugs, so we prevent any exceptions from
+                     // crashing the app. See issue #86.
+@@ -149,12 +285,21 @@ public class BackgroundGeolocationService extends Service {
+                     watchers.remove(watcher);
+                     if (getNotification() == null) {
+                         stopForeground(true);
++                        // The user explicitly stopped tracking (the only caller of
++                        // removeWatcher) — now it's correct to fully stop, unlike the old
++                        // onUnbind/handleOnDestroy paths this patch removed, which fired
++                        // just from the app's screen going away.
++                        stopSelf();
+                     }
+                     return;
+                 }
+             }
+         }
+ 
++        void configureUpload(String apiUrl, String deviceId, String deviceToken) {
++            BackgroundGeolocationService.this.configureUpload(apiUrl, deviceId, deviceToken);
++        }
++
+         void onPermissionsGranted() {
+             // If permissions were granted while the app was in the background, for example in
+             // the Settings app, the watchers need restarting.
+diff --git a/node_modules/@capacitor-community/background-geolocation/definitions.d.ts b/node_modules/@capacitor-community/background-geolocation/definitions.d.ts
+index 5ae4202..02d300f 100644
+--- a/node_modules/@capacitor-community/background-geolocation/definitions.d.ts
++++ b/node_modules/@capacitor-community/background-geolocation/definitions.d.ts
+@@ -114,4 +114,26 @@ export interface BackgroundGeolocationPlugin {
+      * Opens the settings page of the app.
+      */
+     openSettings(): Promise<void>;
++    /**
++     * FLEET TRACKER PATCH (see frontend/patches/): hands the native service what it needs
++     * to upload positions to the backend on its own — required for tracking to keep
++     * reporting once the app's own screen is gone (closed, not just backgrounded), since
++     * there is no JS left running to do it at that point. Call this once, before
++     * addWatcher, each time tracking starts.
++     */
++    configureUpload(options: {
++        apiUrl: string;
++        deviceId: string;
++        deviceToken: string;
++    }): Promise<void>;
++    /**
++     * FLEET TRACKER PATCH: fires after each throttled native upload attempt (see
++     * BackgroundGeolocationService#maybeUploadLocation), success or failure — purely so
++     * the app's own UI (ping count, activity log) can stay accurate. Only ever reaches JS
++     * while the app is open; uploads happen on this schedule regardless.
++     */
++    addListener(
++        eventName: 'uploadResult',
++        listenerFunc: (data: { success: boolean; message: string }) => void
++    ): Promise<{ remove: () => Promise<void> }>;
+ }

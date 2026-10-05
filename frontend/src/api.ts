@@ -5,7 +5,10 @@ import type {
 } from './types';
 import { supabase } from './supabaseClient';
 
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001';
+// Exported for TrackerPage's native background-geolocation path, which has to hand this
+// to the native Android service (see BackgroundGeolocation.configureUpload) so it can post
+// positions on its own once there's no JS left running to do it.
+export const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001';
 
 // Platform-admin tenant switcher: the selected tenant id lives in localStorage and rides
 // along on every authenticated request as X-Tenant-Id. The backend honors it only for

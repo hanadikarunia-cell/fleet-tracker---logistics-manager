@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { BackgroundGeolocationPlugin } from '@capacitor-community/background-geolocation';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { Navigation, Play, Square, AlertTriangle, CheckCircle2, QrCode, Settings } from 'lucide-react';
-import { api, ApiError } from './api';
+import { BarcodeScanner, BarcodeFormat } from '@capacitor-mlkit/barcode-scanning';
+import { Navigation, Play, Square, AlertTriangle, CheckCircle2, QrCode, Settings, ScanLine } from 'lucide-react';
+import { api, ApiError, API_URL } from './api';
 
 const SEND_INTERVAL_MS = 7000;
 
@@ -47,10 +48,36 @@ export default function TrackerPage() {
   const [log, setLog] = useState<LogEntry[]>([]);
   const [pingCount, setPingCount] = useState(0);
 
+  const [isScanning, setIsScanning] = useState(false);
+
   const readingRef = useRef<LiveReading | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const bgWatcherIdRef = useRef<string | null>(null);
   const intervalIdRef = useRef<number | null>(null);
+  const uploadListenerRef = useRef<{ remove: () => Promise<void> } | null>(null);
+
+  // Gets the one-time Google Play Services scanner module ready ahead of time, so the
+  // first tap of "Scan QR Code" doesn't stall on a download. Best-effort — scan() would
+  // still prompt for it itself if this hasn't finished yet.
+  useEffect(() => {
+    if (!isNative) return;
+    BarcodeScanner.installGoogleBarcodeScannerModule().catch(() => {});
+  }, []);
+
+  // Since the native background watcher now deliberately outlives this page (see the
+  // unmount effect below), navigating away and back — e.g. to the Admin Portal and back —
+  // must not call addWatcher a second time on top of the one still running; that would
+  // register a redundant watcher on the same service. The watcher id is persisted purely
+  // so "Stop Tracking" still works after a remount, by addressing the SAME watcher rather
+  // than one this fresh component instance never created.
+  useEffect(() => {
+    if (!isNative) return;
+    const savedId = localStorage.getItem('tracker_bg_watcher_id');
+    if (savedId) {
+      bgWatcherIdRef.current = savedId;
+      setIsTracking(true);
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('tracker_device_id', deviceId);
@@ -77,6 +104,46 @@ export default function TrackerPage() {
       setPairError(err instanceof Error ? err.message : 'Pairing failed');
     } finally {
       setIsPairing(false);
+    }
+  };
+
+  // In-app scan: the QR encodes a link (…/track.html?deviceId=X&pair=CODE) — same format
+  // the deep-link path below handles, just read directly from the camera instead of
+  // requiring the phone's separate Camera app + a tap-through. Native only; scan() has no
+  // web implementation.
+  const handleScanQr = async () => {
+    if (isPairing || isScanning) return;
+    setPairError(null);
+    setIsScanning(true);
+    try {
+      const { barcodes } = await BarcodeScanner.scan({ formats: [BarcodeFormat.QrCode] });
+      const raw = barcodes[0]?.displayValue || barcodes[0]?.rawValue;
+      if (!raw) {
+        setPairError('No code detected. Try again, or enter it manually below.');
+        return;
+      }
+      let qrDeviceId: string | null = null;
+      let qrCode: string | null = null;
+      try {
+        const url = new URL(raw);
+        qrDeviceId = url.searchParams.get('deviceId');
+        qrCode = url.searchParams.get('pair');
+      } catch {
+        // Not a URL at all — falls through to the "doesn't look like" message below.
+      }
+      if (!qrDeviceId || !qrCode) {
+        setPairError("That code doesn't look like a Fleet Tracker pairing QR. Enter it manually below instead.");
+        return;
+      }
+      await pairDevice(qrDeviceId, qrCode);
+    } catch (err) {
+      // Includes the user backing out of the scanner — not worth surfacing as an error.
+      const message = err instanceof Error ? err.message : '';
+      if (!/cancel/i.test(message)) {
+        setPairError(message || 'Could not open the scanner.');
+      }
+    } finally {
+      setIsScanning(false);
     }
   };
 
@@ -136,8 +203,25 @@ export default function TrackerPage() {
       // runs and location still reports, the notification just might not appear.
       LocalNotifications.requestPermissions().catch(() => {});
 
+      // Hands the native side what it needs to upload positions on its own — required so
+      // tracking keeps reporting even after the app is swiped away and this JS stops
+      // running entirely, not just backgrounded. See BackgroundGeolocationService's class
+      // comment (patched — frontend/patches/) for how this is used on the native side.
+      BackgroundGeolocation.configureUpload({ apiUrl: API_URL, deviceId, deviceToken }).catch((err) => {
+        pushLog({ time: new Date().toLocaleTimeString(), ok: false, message: err instanceof Error ? err.message : 'Failed to configure background upload' });
+      });
+
+      // Reports the result of each native upload (the actual POST now happens in Java, not
+      // here — see the patch above) purely so the UI's ping count / log stay accurate.
+      BackgroundGeolocation.addListener('uploadResult', ({ success, message }) => {
+        if (success) setPingCount((c) => c + 1);
+        pushLog({ time: new Date().toLocaleTimeString(), ok: success, message });
+      }).then((handle) => {
+        uploadListenerRef.current = handle;
+      });
+
       // Giving backgroundMessage/backgroundTitle is what makes this plugin keep
-      // delivering fixes with the screen off or the app minimized — without them it
+      // delivering fixes with the screen off or the app closed — without them it
       // behaves like plain foreground-only geolocation. The ongoing notification it
       // puts up is required by Android for a location foreground service; it isn't
       // an error.
@@ -158,6 +242,10 @@ export default function TrackerPage() {
             return;
           }
           if (!location) return;
+          // Display only — the actual upload to the backend happens natively now (see
+          // above), so this callback never calls sendCurrentPosition itself. That avoids
+          // double-posting: one upload path, native, regardless of whether the app is
+          // open, backgrounded, or fully closed.
           const next: LiveReading = {
             lat: location.latitude,
             lng: location.longitude,
@@ -172,10 +260,14 @@ export default function TrackerPage() {
       )
         .then((id) => {
           bgWatcherIdRef.current = id;
+          localStorage.setItem('tracker_bg_watcher_id', id);
         })
         .catch((err) => {
           setGeoError(err instanceof Error ? err.message : 'Failed to start background location tracking.');
         });
+
+      setIsTracking(true);
+      return;
     } else {
       if (!('geolocation' in navigator)) {
         setGeoError('This browser does not support geolocation.');
@@ -207,15 +299,30 @@ export default function TrackerPage() {
     if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
     if (bgWatcherIdRef.current !== null) {
       BackgroundGeolocation.removeWatcher({ id: bgWatcherIdRef.current }).catch(() => {});
+      localStorage.removeItem('tracker_bg_watcher_id');
+    }
+    if (uploadListenerRef.current !== null) {
+      uploadListenerRef.current.remove().catch(() => {});
     }
     if (intervalIdRef.current !== null) window.clearInterval(intervalIdRef.current);
     watchIdRef.current = null;
     bgWatcherIdRef.current = null;
+    uploadListenerRef.current = null;
     intervalIdRef.current = null;
     setIsTracking(false);
   };
 
-  useEffect(() => stopTracking, []);
+  // Web fallback only — a watchPosition + interval genuinely leaks if this component
+  // unmounts without cleanup. The native background watcher is deliberately NOT stopped
+  // here: it's supposed to keep running independent of this page's lifecycle (navigating
+  // elsewhere in the app, or the app being swiped away entirely), so it only stops when
+  // the user actually taps Stop Tracking.
+  useEffect(() => {
+    return () => {
+      if (!isNative) stopTracking();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const forgetDevice = () => {
     stopTracking();
@@ -267,7 +374,21 @@ export default function TrackerPage() {
               <QrCode className="w-4 h-4" />
               <span className="text-[11px] font-bold">Scan the QR code shown in GPS Hardware Register to pair automatically.</span>
             </div>
-            <p className="text-[10px] text-slate-500">Can't scan? Enter the device ID and the short pairing code shown underneath it instead.</p>
+
+            {isNative ? (
+              <>
+                <button
+                  onClick={handleScanQr}
+                  disabled={isScanning || isPairing}
+                  className="w-full py-3 rounded-xl font-extrabold text-sm bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:pointer-events-none transition flex items-center justify-center gap-2"
+                >
+                  <ScanLine className="w-4 h-4" /> {isScanning ? 'Scanning…' : 'Scan QR Code'}
+                </button>
+                <p className="text-[10px] text-slate-500 text-center">Or enter the device ID and pairing code shown underneath it manually below.</p>
+              </>
+            ) : (
+              <p className="text-[10px] text-slate-500">Open this page in the Fleet Tracker app to scan the code with the camera, or enter the device ID and the short pairing code shown underneath it below.</p>
+            )}
 
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide pt-1">Device ID</label>
             <input
