@@ -36,9 +36,16 @@ export default function AppLauncherPage() {
   // (App.getInfo().build) so "is there something newer" never depends on parsing
   // version-name strings.
   const [updateInfo, setUpdateInfo] = useState<ApkVersionInfo | null>(null);
+  const [installedVersion, setInstalledVersion] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [phase, setPhase] = useState<UpdatePhase>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // UpdateInstaller (the "download it for you" plugin) only exists starting in the build
+  // that introduced it — an app older than that has no way to call it at all, so trying
+  // throws a raw "plugin not implemented" error instead of doing anything. That one jump
+  // can only ever happen via the manual link below; every release after it can use the
+  // button normally since by then the plugin is already part of what's installed.
+  const [installerUnavailable, setInstallerUnavailable] = useState(false);
 
   useEffect(() => {
     if (!isNative) return;
@@ -46,6 +53,7 @@ export default function AppLauncherPage() {
     (async () => {
       try {
         const [info, res] = await Promise.all([CapacitorApp.getInfo(), fetch('/apk-version.json')]);
+        if (!cancelled) setInstalledVersion(info.version);
         if (!res.ok) return;
         const latest: ApkVersionInfo = await res.json();
         const installedBuild = Number(info.build);
@@ -80,8 +88,17 @@ export default function AppLauncherPage() {
     try {
       await UpdateInstaller.downloadAndInstall({ url: updateInfo.downloadUrl });
     } catch (err) {
-      setPhase('error');
-      setErrorMessage(err instanceof Error ? err.message : 'Could not start the download.');
+      const message = err instanceof Error ? err.message : '';
+      if (/not implemented/i.test(message)) {
+        // The currently-installed app predates this feature entirely — there's no
+        // in-app way to bridge that gap, only the manual link below can.
+        setInstallerUnavailable(true);
+        setPhase('idle');
+        setErrorMessage(null);
+      } else {
+        setPhase('error');
+        setErrorMessage(message || 'Could not start the download.');
+      }
     }
   };
 
@@ -107,6 +124,10 @@ export default function AppLauncherPage() {
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Choose how you're signing in</p>
           </div>
         </div>
+
+        {installedVersion && (
+          <p className="text-center text-[10px] text-slate-600 font-mono -mt-3">App version {installedVersion}</p>
+        )}
 
         <a
           href="/track.html"
@@ -186,6 +207,16 @@ export default function AppLauncherPage() {
               </div>
             )}
 
+            {installerUnavailable && (
+              <div className="flex items-start gap-2 p-3 bg-amber-950 border border-amber-800 rounded-xl text-xs text-amber-300">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div>
+                  Your current app is too old for one-tap updates to work yet. Use "Download the file manually"
+                  below this one time — after that's installed, future updates will use the button above normally.
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button
                 onClick={() => setDismissed(true)}
@@ -223,9 +254,13 @@ export default function AppLauncherPage() {
               href={updateInfo.downloadUrl}
               target="_blank"
               rel="noreferrer"
-              className="block text-center text-[10px] text-slate-500 hover:text-slate-300 underline underline-offset-2"
+              className={
+                installerUnavailable
+                  ? 'block text-center text-xs font-extrabold text-blue-400 hover:text-blue-300 underline underline-offset-2'
+                  : 'block text-center text-[10px] text-slate-500 hover:text-slate-300 underline underline-offset-2'
+              }
             >
-              Having trouble? Download the file manually instead
+              {installerUnavailable ? 'Download the file manually' : 'Having trouble? Download the file manually instead'}
             </a>
           </div>
         </div>
