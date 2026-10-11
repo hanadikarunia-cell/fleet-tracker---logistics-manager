@@ -161,6 +161,8 @@ export default function App() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [historyPoints, setHistoryPoints] = useState<LocationHistoryPoint[] | null>(null);
   const [isPlayingHistory, setIsPlayingHistory] = useState(false);
+  const [showHistoryRangeMenu, setShowHistoryRangeMenu] = useState(false);
+  const [historyRange, setHistoryRange] = useState<'today' | 'week' | 'month' | 'year' | 'all'>('today');
   const [isDrawingGeofence, setIsDrawingGeofence] = useState(false);
   const [showGeofenceModal, setShowGeofenceModal] = useState(false);
   const [pendingGeofenceCoords, setPendingGeofenceCoords] = useState<{ lat: number, lng: number } | null>(null);
@@ -909,15 +911,36 @@ export default function App() {
   };
 
   // LOCATION PLAYBACK HISTORIES
-  const handleToggleHistoryPlayback = async () => {
+  // A vehicle's raw ping history has no natural "trip" boundaries — fetching all of it and
+  // connecting every point in order used to draw one continuous line across unrelated
+  // sessions, sometimes weeks apart (reported as "not on the correct path"). The backend
+  // already supported a from/to range; this just picks one before fetching, defaulting to
+  // today rather than the vehicle's entire history.
+  const historyRangeFrom = (range: 'today' | 'week' | 'month' | 'year' | 'all'): string | undefined => {
+    const now = new Date();
+    if (range === 'today') return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    if (range === 'week') return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    if (range === 'month') return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()).toISOString();
+    if (range === 'year') return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString();
+    return undefined; // 'all' — no lower bound
+  };
+
+  const loadHistoryForRange = async (range: 'today' | 'week' | 'month' | 'year' | 'all') => {
+    if (!selectedVehicle) return;
+    const hist = await api.vehicles.history(selectedVehicle.id, { from: historyRangeFrom(range) });
+    setHistoryPoints(hist.length ? hist : null);
+    setIsPlayingHistory(true);
+    setHistoryRange(range);
+    setShowHistoryRangeMenu(false);
+  };
+
+  const handleToggleHistoryPlayback = () => {
     if (isPlayingHistory) {
       setHistoryPoints(null);
       setIsPlayingHistory(false);
-    } else if (selectedVehicle) {
-      const hist = await api.vehicles.history(selectedVehicle.id);
-      setHistoryPoints(hist.length ? hist : null);
-      setIsPlayingHistory(true);
+      return;
     }
+    setShowHistoryRangeMenu((open) => !open);
   };
 
   const handleSelectVehicle = (vehicle: Vehicle) => {
@@ -925,6 +948,7 @@ export default function App() {
     // If history points were loaded for a previous vehicle, clear it on new selection
     setHistoryPoints(null);
     setIsPlayingHistory(false);
+    setShowHistoryRangeMenu(false);
     setActiveTab('map');
   };
 
@@ -1503,18 +1527,42 @@ export default function App() {
                 )}
 
                 {selectedVehicle && (
-                  <button
-                    id="btn-toggle-history"
-                    onClick={handleToggleHistoryPlayback}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition border ${
-                      isPlayingHistory 
-                        ? 'bg-indigo-600 text-white border-indigo-700 shadow-md' 
-                        : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
-                    }`}
-                  >
-                    <Navigation className="w-4 h-4" /> 
-                    {isPlayingHistory ? 'Clear Route Trail' : 'Plot History Trail'}
-                  </button>
+                  <div className="relative">
+                    <button
+                      id="btn-toggle-history"
+                      onClick={handleToggleHistoryPlayback}
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition border ${
+                        isPlayingHistory
+                          ? 'bg-indigo-600 text-white border-indigo-700 shadow-md'
+                          : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                      }`}
+                    >
+                      <Navigation className="w-4 h-4" />
+                      {isPlayingHistory ? `Clear Trail (${historyRange})` : 'Plot History Trail'}
+                    </button>
+
+                    {showHistoryRangeMenu && !isPlayingHistory && (
+                      <div className="absolute right-0 mt-2 bg-white rounded-xl shadow-2xl p-2 border border-slate-100 w-44 flex flex-col gap-1 z-30">
+                        <p className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">Show trail for</p>
+                        {([
+                          ['today', 'Today'],
+                          ['week', 'Past 7 Days'],
+                          ['month', 'Past Month'],
+                          ['year', 'Past Year'],
+                          ['all', 'All Time (raw)'],
+                        ] as const).map(([key, label]) => (
+                          <button
+                            key={key}
+                            id={`btn-history-range-${key}`}
+                            onClick={() => loadHistoryForRange(key)}
+                            className="text-left px-3 py-1.5 text-xs rounded-lg hover:bg-indigo-50 text-slate-800 font-semibold transition cursor-pointer"
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )}

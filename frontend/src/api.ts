@@ -96,7 +96,13 @@ export const api = {
     create: (v: Omit<Vehicle, 'id'> & { id?: string }) => post<Vehicle>('/api/vehicles', v),
     update: (id: string, v: Partial<Vehicle>) => put<Vehicle>(`/api/vehicles/${id}`, v),
     remove: (id: string) => del(`/api/vehicles/${id}`),
-    history: (id: string) => get<LocationHistoryPoint[]>(`/api/vehicles/${id}/history`),
+    history: (id: string, range?: { from?: string; to?: string }) => {
+      const params = new URLSearchParams();
+      if (range?.from) params.set('from', range.from);
+      if (range?.to) params.set('to', range.to);
+      const qs = params.toString();
+      return get<LocationHistoryPoint[]>(`/api/vehicles/${id}/history${qs ? `?${qs}` : ''}`);
+    },
   },
   devices: {
     list: () => get<GPSDevice[]>('/api/devices'),
