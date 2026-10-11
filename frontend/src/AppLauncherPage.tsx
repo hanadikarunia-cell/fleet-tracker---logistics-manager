@@ -20,6 +20,11 @@ interface ApkVersionInfo {
 }
 
 const isNative = Capacitor.isNativePlatform();
+// apk-version.json and UpdateInstaller (its download-and-install plugin) are both
+// Android-specific — there's no .apk on iOS and no equivalent plugin written for it, so
+// this whole update-check only makes sense on Android. Gating on isNative alone would
+// show an "Update Available" popup on iOS that fails the moment anyone taps its button.
+const isAndroid = Capacitor.getPlatform() === 'android';
 
 // 'downloading' covers both the download itself and the brief gap before Android's own
 // install dialog appears — there's no in-app progress bar; Android's download notification
@@ -48,12 +53,16 @@ export default function AppLauncherPage() {
   const [installerUnavailable, setInstallerUnavailable] = useState(false);
 
   useEffect(() => {
+    // The version label itself (CapacitorApp.getInfo) is harmless and useful on any
+    // native platform; the update CHECK against apk-version.json is Android-only.
     if (!isNative) return;
     let cancelled = false;
     (async () => {
       try {
-        const [info, res] = await Promise.all([CapacitorApp.getInfo(), fetch('/apk-version.json')]);
+        const info = await CapacitorApp.getInfo();
         if (!cancelled) setInstalledVersion(info.version);
+        if (!isAndroid) return;
+        const res = await fetch('/apk-version.json');
         if (!res.ok) return;
         const latest: ApkVersionInfo = await res.json();
         const installedBuild = Number(info.build);

@@ -30,6 +30,12 @@ interface LogEntry {
 }
 
 const isNative = Capacitor.isNativePlatform();
+// The native position-upload bypass (BackgroundGeolocation.configureUpload, the
+// patch in frontend/patches/) only exists on Android — it's a patch to that
+// plugin's Android Java source, never touched on iOS. On iOS, BackgroundGeolocation
+// still gives better location fixes than plain web geolocation, but actually
+// sending each position still goes through the ordinary JS interval below.
+const isAndroid = Capacitor.getPlatform() === 'android';
 
 export default function TrackerPage() {
   const [deviceId, setDeviceId] = useState(() => localStorage.getItem('tracker_device_id') || 'GPS-101');
@@ -64,14 +70,16 @@ export default function TrackerPage() {
     BarcodeScanner.installGoogleBarcodeScannerModule().catch(() => {});
   }, []);
 
-  // Since the native background watcher now deliberately outlives this page (see the
-  // unmount effect below), navigating away and back — e.g. to the Admin Portal and back —
-  // must not call addWatcher a second time on top of the one still running; that would
-  // register a redundant watcher on the same service. The watcher id is persisted purely
-  // so "Stop Tracking" still works after a remount, by addressing the SAME watcher rather
-  // than one this fresh component instance never created.
+  // Android only: the native service deliberately outlives this page (see the unmount
+  // effect below) as a real OS-level background service, so navigating away and back —
+  // e.g. to the Admin Portal and back — must not call addWatcher a second time on top of
+  // the one still running. The watcher id is persisted purely so "Stop Tracking" still
+  // works after a remount, by addressing the SAME watcher rather than one this fresh
+  // component instance never created. Skipped on iOS: there's no equivalent persistent
+  // service there (only the patched Android build has one), so restoring "tracking: on"
+  // after a remount would show a state nothing is actually feeding anymore.
   useEffect(() => {
-    if (!isNative) return;
+    if (!isAndroid) return;
     const savedId = localStorage.getItem('tracker_bg_watcher_id');
     if (savedId) {
       bgWatcherIdRef.current = savedId;
@@ -201,24 +209,29 @@ export default function TrackerPage() {
       // Android 13+ needs this for the foreground service's "tracking active"
       // notification to actually show. Best-effort: if it's denied the service still
       // runs and location still reports, the notification just might not appear.
+      // Harmless on iOS too — @capacitor/local-notifications is cross-platform.
       LocalNotifications.requestPermissions().catch(() => {});
 
-      // Hands the native side what it needs to upload positions on its own — required so
-      // tracking keeps reporting even after the app is swiped away and this JS stops
-      // running entirely, not just backgrounded. See BackgroundGeolocationService's class
-      // comment (patched — frontend/patches/) for how this is used on the native side.
-      BackgroundGeolocation.configureUpload({ apiUrl: API_URL, deviceId, deviceToken }).catch((err) => {
-        pushLog({ time: new Date().toLocaleTimeString(), ok: false, message: err instanceof Error ? err.message : 'Failed to configure background upload' });
-      });
+      if (isAndroid) {
+        // Hands the native side what it needs to upload positions on its own — required so
+        // tracking keeps reporting even after the app is swiped away and this JS stops
+        // running entirely, not just backgrounded. Android only — see the isAndroid
+        // comment above. See BackgroundGeolocationService's class comment (patched —
+        // frontend/patches/) for how this is used on the native side.
+        BackgroundGeolocation.configureUpload({ apiUrl: API_URL, deviceId, deviceToken }).catch((err) => {
+          pushLog({ time: new Date().toLocaleTimeString(), ok: false, message: err instanceof Error ? err.message : 'Failed to configure background upload' });
+        });
 
-      // Reports the result of each native upload (the actual POST now happens in Java, not
-      // here — see the patch above) purely so the UI's ping count / log stay accurate.
-      BackgroundGeolocation.addListener('uploadResult', ({ success, message }) => {
-        if (success) setPingCount((c) => c + 1);
-        pushLog({ time: new Date().toLocaleTimeString(), ok: success, message });
-      }).then((handle) => {
-        uploadListenerRef.current = handle;
-      });
+        // Reports the result of each native upload (the actual POST now happens in Java,
+        // not here — see the patch above) purely so the UI's ping count / log stay
+        // accurate. Only fires on Android, since only Android ever performs this upload.
+        BackgroundGeolocation.addListener('uploadResult', ({ success, message }) => {
+          if (success) setPingCount((c) => c + 1);
+          pushLog({ time: new Date().toLocaleTimeString(), ok: success, message });
+        }).then((handle) => {
+          uploadListenerRef.current = handle;
+        });
+      }
 
       // Giving backgroundMessage/backgroundTitle is what makes this plugin keep
       // delivering fixes with the screen off or the app closed — without them it
@@ -242,10 +255,10 @@ export default function TrackerPage() {
             return;
           }
           if (!location) return;
-          // Display only — the actual upload to the backend happens natively now (see
-          // above), so this callback never calls sendCurrentPosition itself. That avoids
-          // double-posting: one upload path, native, regardless of whether the app is
-          // open, backgrounded, or fully closed.
+          // On Android this is display-only — the actual upload happens natively (see
+          // above), so this callback never calls sendCurrentPosition itself there, which
+          // avoids double-posting. On iOS there's no native upload bypass, so updating
+          // readingRef here is what the JS interval below actually sends.
           const next: LiveReading = {
             lat: location.latitude,
             lng: location.longitude,
@@ -266,8 +279,12 @@ export default function TrackerPage() {
           setGeoError(err instanceof Error ? err.message : 'Failed to start background location tracking.');
         });
 
-      setIsTracking(true);
-      return;
+      if (isAndroid) {
+        // Android's native side sends on its own — no JS interval needed.
+        setIsTracking(true);
+        return;
+      }
+      // iOS falls through to the shared interval start below, same as the web fallback.
     } else {
       if (!('geolocation' in navigator)) {
         setGeoError('This browser does not support geolocation.');

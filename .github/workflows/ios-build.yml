@@ -1,0 +1,69 @@
+name: Build iOS test IPA
+
+# Manual only — this produces an UNSIGNED .ipa for personal sideloading (Sideloadly +
+# your own free Apple ID), not a distributable build. No Apple Developer account, no
+# certificates, nothing stored in this repo's secrets — the signing step happens on your
+# own machine afterward, never in CI.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Build the web app
+        run: npm run build
+
+      - name: Sync the web build into the iOS project
+        run: npx cap sync ios
+
+      - name: Install CocoaPods dependencies
+        working-directory: frontend/ios/App
+        run: pod install
+
+      - name: Archive (unsigned — no Apple account needed)
+        working-directory: frontend/ios/App
+        run: |
+          xcodebuild archive \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -archivePath build/App.xcarchive \
+            -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+
+      # xcodebuild's own -exportArchive needs a signed archive + export options plist tied
+      # to a real Apple account, which this intentionally has none of. For an unsigned
+      # test build the standard workaround is simpler: the archive's own .app is already a
+      # complete, unsigned app bundle — repackage it as a plain Payload/*.app zip, which is
+      # exactly what a .ipa is, and sign it afterward on your own machine with Sideloadly.
+      - name: Package the unsigned .app as an .ipa
+        working-directory: frontend/ios/App
+        run: |
+          set -e
+          APP_PATH="build/App.xcarchive/Products/Applications/App.app"
+          mkdir -p build/ipa/Payload
+          cp -R "$APP_PATH" build/ipa/Payload/
+          cd build/ipa
+          zip -r ../FleetTracker-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FleetTracker-unsigned-ipa
+          path: frontend/ios/App/build/FleetTracker-unsigned.ipa
+          retention-days: 14
