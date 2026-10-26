@@ -877,16 +877,28 @@ export default function MapView({
 
     const latLngs = historyPoints.map((pt) => [pt.lat, pt.lng] as L.LatLngTuple);
 
-    // Draw route polyline
-    const polyline = L.polyline(latLngs, {
-      color: '#6366F1', // Indigo 500
-      weight: 4,
-      opacity: 0.8,
-      lineCap: 'round',
-      lineJoin: 'round',
-    });
+    // Consecutive pings separated by a long gap (device off / out of range between test
+    // drives, not a continuous trip) get connected by a straight line across whatever's in
+    // between — roads, blocks, lakes — if plotted as one polyline. Split into segments at
+    // any gap over 10 minutes and draw each separately instead of bridging them.
+    const SEGMENT_GAP_MS = 10 * 60 * 1000;
+    const segments: L.LatLngTuple[][] = [[latLngs[0]]];
+    for (let i = 1; i < historyPoints.length; i++) {
+      const gapMs = new Date(historyPoints[i].timestamp).getTime() - new Date(historyPoints[i - 1].timestamp).getTime();
+      if (gapMs > SEGMENT_GAP_MS) segments.push([]);
+      segments[segments.length - 1].push(latLngs[i]);
+    }
 
-    polyline.addTo(historyGroupRef.current);
+    for (const segment of segments) {
+      if (segment.length < 2) continue;
+      L.polyline(segment, {
+        color: '#6366F1', // Indigo 500
+        weight: 4,
+        opacity: 0.8,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(historyGroupRef.current);
+    }
 
     // Start & End markers
     const startPoint = latLngs[0];

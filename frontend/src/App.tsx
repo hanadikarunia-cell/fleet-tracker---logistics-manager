@@ -162,7 +162,8 @@ export default function App() {
   const [historyPoints, setHistoryPoints] = useState<LocationHistoryPoint[] | null>(null);
   const [isPlayingHistory, setIsPlayingHistory] = useState(false);
   const [showHistoryRangeMenu, setShowHistoryRangeMenu] = useState(false);
-  const [historyRange, setHistoryRange] = useState<'today' | 'week' | 'month' | 'year' | 'all'>('today');
+  const [historyRange, setHistoryRange] = useState<string>('today');
+  const [customHistoryDate, setCustomHistoryDate] = useState('');
   const [isDrawingGeofence, setIsDrawingGeofence] = useState(false);
   const [showGeofenceModal, setShowGeofenceModal] = useState(false);
   const [pendingGeofenceCoords, setPendingGeofenceCoords] = useState<{ lat: number, lng: number } | null>(null);
@@ -934,6 +935,21 @@ export default function App() {
     setShowHistoryRangeMenu(false);
   };
 
+  // Trace a single calendar day, picked from the date input in the range menu — distinct
+  // from the relative ranges above since it needs both a lower AND upper bound (otherwise
+  // "that day" would include every ping after it too).
+  const loadHistoryForDate = async (dateStr: string) => {
+    if (!selectedVehicle || !dateStr) return;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const from = new Date(y, m - 1, d).toISOString();
+    const to = new Date(y, m - 1, d + 1).toISOString();
+    const hist = await api.vehicles.history(selectedVehicle.id, { from, to });
+    setHistoryPoints(hist.length ? hist : null);
+    setIsPlayingHistory(true);
+    setHistoryRange(dateStr);
+    setShowHistoryRangeMenu(false);
+  };
+
   const handleToggleHistoryPlayback = () => {
     if (isPlayingHistory) {
       setHistoryPoints(null);
@@ -949,6 +965,7 @@ export default function App() {
     setHistoryPoints(null);
     setIsPlayingHistory(false);
     setShowHistoryRangeMenu(false);
+    setCustomHistoryDate('');
     setActiveTab('map');
   };
 
@@ -1542,7 +1559,7 @@ export default function App() {
                     </button>
 
                     {showHistoryRangeMenu && !isPlayingHistory && (
-                      <div className="absolute right-0 mt-2 bg-white rounded-xl shadow-2xl p-2 border border-slate-100 w-44 flex flex-col gap-1 z-30">
+                      <div className="absolute right-0 mt-2 bg-white rounded-xl shadow-2xl p-2 border border-slate-100 w-52 flex flex-col gap-1 z-30">
                         <p className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">Show trail for</p>
                         {([
                           ['today', 'Today'],
@@ -1560,6 +1577,27 @@ export default function App() {
                             {label}
                           </button>
                         ))}
+                        <div className="h-px bg-slate-100 my-1" />
+                        <p className="text-[10px] font-bold text-slate-400 px-2 py-1 uppercase tracking-wider">Specific day</p>
+                        <div className="flex items-center gap-1 px-1">
+                          <input
+                            id="input-history-date"
+                            type="date"
+                            value={customHistoryDate}
+                            max={new Date().toISOString().slice(0, 10)}
+                            onChange={(e) => setCustomHistoryDate(e.target.value)}
+                            className="flex-1 min-w-0 px-2 py-1.5 text-xs rounded-lg border border-slate-200 text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                          />
+                          <button
+                            id="btn-history-date-go"
+                            onClick={() => loadHistoryForDate(customHistoryDate)}
+                            disabled={!customHistoryDate}
+                            title="Trace this day"
+                            className="p-1.5 rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 transition shrink-0"
+                          >
+                            <CheckIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
